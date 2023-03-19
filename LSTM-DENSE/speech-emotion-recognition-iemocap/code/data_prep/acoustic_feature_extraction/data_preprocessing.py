@@ -100,7 +100,18 @@ def extract_features(args):
                 'oth': 8,
                 'dis': 8}
     columns = ['wav_file', 'label', 'mfccs', 'spec_db']
-    df_features = pd.DataFrame(columns=columns)
+    #df_features = pd.DataFrame(columns=columns, dtypes = ['str', 'int', 'float', 'float'])
+    #df_features = pd.DataFrame({'wav_file': [], 'label': np.array([], dtype = int), 'mfccs': np.array([], dtype = np.float32), 'spec_db': np.array([], dtype = np.float32)})
+    #df_features = np.array([[], [], [], []])
+    # wav_file_array = np.array([])
+    # label_array = np.array([], dtype = int)
+    # mfccs_array = np.array([], dtype = np.float32)
+    # spec_db_array = np.array([], dtype = np.float32)
+    wav_file_array = []
+    label_array = []
+    mfccs_array = []
+    spec_db_array = []
+
     audio_vectors_path= args.output_dir + 'audio_vectors_'
 
     for sess in range(1, 6):
@@ -121,23 +132,56 @@ def extract_features(args):
 
             # Convert power spectrogram to dB-scaled spectrogram
             spec_db = librosa.power_to_db(spec, ref=np.max)
+            #breakpoint()
 
             features_all = [mfccs, spec_db]        
             feature_list = [wav_file_name, label] + features_all
+
+            wav_file_array.append(wav_file_name)
+            label_array.append(label)
+            mfccs_array.append(np.array(mfccs))
             
-            df_features = df_features.append(pd.DataFrame(feature_list, index=columns).transpose(), ignore_index=True)
+            spec_db_array.append(np.array(spec_db))
+            #breakpoint()
+
+            
+            #df_features = df_features.append(pd.DataFrame(feature_list, index=columns).transpose(), ignore_index=True)
             #print(df_features.head())
             #breakpoint()
             #sys.exit()
+            #break
             
+        
         print("Session Finished {}".format(sess))
+    #breakpoint()
+    #df_features = pd.DataFrame({'wav_file': wav_file_array, 'label': label_array, 'mfccs': mfccs_array, 'spec_db': spec_db_array})
+    #breakpoint()
+    '''with open(args.output_dir + 'df_features.txt', 'w+') as f:
+        f.write('wav_file,label,mfccs,spec_db'+ "\n")
+         
+        for i in range(len(wav_file_array)):
+            f.write('{}, {}, {}, {}n'.format(wav_file_array[i], label_array[i], mfccs_array[i], spec_db_array[i])+ "\n")'''
+    output_dictionary = {'wav_file': wav_file_array, 'label': label_array, 'mfccs': mfccs_array, 'spec_db': spec_db_array}
+    with open(args.output_dir + 'feature_vectors.pkl', 'wb') as f:
+        pickle.dump(output_dictionary, f)
     
-    df_features.to_csv(args.output_dir + 'df_features.csv', index=False)
+    #breakpoint()
+
+        
+    
+    #df_features.to_csv(args.output_dir + 'df_features.csv', index=False)
 
 def read_df_features(args):
-    df_features = pd.read_csv(args.output_dir + 'df_features.csv')
+    #df_features = pd.read_csv(args.output_dir + 'df_features.csv')
+    #df_features = np.loadtxt(args.output_dir + 'df_features.txt', delimiter=',', skiprows=1, dtype=str)
+    audio_vectors = pickle.load(open((args.output_dir+'feature_vectors.pkl'), 'rb'))
+    breakpoint()
+    #test = np.array(df_features['spec_db'], dtype=float)
+    #print(test.shape)
+    '''print(test.dtype)
+    breakpoint()'''
     print(df_features.head())
-    print(df_features.shape)
+    print(df_features.columns)
 
     
 
@@ -148,6 +192,6 @@ if __name__ == '__main__':
     parser.add_argument('--output_dir', type=str, default='/home/sgowrira/domain_adaptation/LSTM-DENSE/speech-emotion-recognition-iemocap/preprocess_info/')
     args = parser.parse_args()
     #read_labels(args)
-    #extract_features(args)
+    extract_features(args)
     read_df_features(args)
     
