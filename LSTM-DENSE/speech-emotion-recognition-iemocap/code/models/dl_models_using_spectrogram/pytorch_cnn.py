@@ -99,8 +99,8 @@ def load_data(args):
 
     train_dataset = CustomDataset(train_dataset)
     test_dataset = CustomDataset(test_dataset)
-    trainloader = torch.utils.data.DataLoader(dataset, batch_size=32, shuffle=True, collate_fn=collate_fn)
-    testloader = torch.utils.data.DataLoader(dataset, batch_size=32, shuffle=True, collate_fn=collate_fn)
+    trainloader = torch.utils.data.DataLoader(train_dataset, batch_size=32, shuffle=True, collate_fn=collate_fn)
+    testloader = torch.utils.data.DataLoader(test_dataset, batch_size=32, shuffle=True, collate_fn=collate_fn)
 
     #check below code of reweighting and run training 
     #breakpoint()
