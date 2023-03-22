@@ -10,299 +10,188 @@ Original file is located at
 from __future__ import print_function
 import numpy as np 
 import pandas as pd 
-import torch 
-import torch.nn.functional as F
+import argparse
+import pickle
+import random
 import matplotlib.pyplot as plt
 import seaborn as sns
-
-
 import IPython.display as ipd
-
 import warnings
 import os
 warnings.filterwarnings('ignore')
+from sklearn.metrics import confusion_matrix
+import wandb
 
-from torch import nn, optim
+import torch 
+import torch.nn.functional as F
 from torchvision import transforms, models, datasets
-
-
 from torch.autograd import Variable
 from torch.utils.data import Dataset, DataLoader
 from sklearn.metrics import confusion_matrix, classification_report
-import argparse
-import numpy as np
-import os
-import pickle
-import random
+import librosa
+import librosa.display
+import regex as re
+from torchvision.io import read_image
+import torch.nn as nn
+
+
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+print('Device being used is {}'.format(device))
+
+
+classes = {'angry':0, 'happiness':1, 'excited':2, 'neutral':3} 
 
 class CustomDataset(Dataset):
-    def __init__(self, dataset):
+    def __init__(self, dataset_path, split, val_session, transform):
+        #breakpoint()
+        self.transform = transform
+        emotion_dirs = os.listdir(dataset_path)
+        self.spectrogram = []
+        self.labels = []
+        for emotion_dir in emotion_dirs:
+            for image in os.listdir(os.path.join(dataset_path, emotion_dir)):
+                #if extension not is not .jpg, skip
+                if image.split('.')[-1] != 'jpg':
+                    continue
+                image_session = image.split('_')[0]
+                image_session = int(re.search(r'\d+', image_session).group(0))
+                if split == 'train':
+                    if image_session != val_session:
+                        #breakpoint()
+                        self.spectrogram.append(os.path.join(dataset_path, emotion_dir, image))
+                        self.labels.append(classes[emotion_dir])
+                else:
+                    if image_session == val_session:
+                        self.spectrogram.append(os.path.join(dataset_path, emotion_dir, image))
+                        self.labels.append(classes[emotion_dir])
         
-        self.spectrogram = dataset['spec_db']
-        self.labels = dataset['label']
-        self.filename = dataset['wav_file']
 
     def __len__(self):
         return len(self.spectrogram)
 
     def __getitem__(self, idx):
-        return torch.tensor(self.spectrogram[idx]), torch.tensor(self.labels[idx]), self.filename[idx]
-
-def collate_fn(batch):
-        # Determine the maximum length of the spectrograms in the batch
-        max_len = max(spec.shape[1] for spec, label, filename in batch)
-
-        # Pad the spectrograms with zeros to the maximum length
-        padded_specs = []
-        for spec, label, filename in batch:
-            num_cols = spec.shape[1]
-            padding = torch.zeros((128, max_len - num_cols))
-            padded_specs.append(torch.cat([spec, padding], dim=1))
-
-        # Concatenate the padded spectrograms into a tensor
-        specs_tensor = torch.stack(padded_specs, dim=0)
-
-        # Convert the labels to PyTorch tensor
-        labels_tensor = torch.tensor([label for spec, label, filename in batch])
-
-        # Create a list of filenames
-        filenames_list = [filename for spec, label, filename in batch]
-
-        return specs_tensor, labels_tensor, filenames_list
+        #breakpoint()
+        return self.transform(read_image(self.spectrogram[idx])), torch.tensor(self.labels[idx])
 
 
-def load_data(args):
-    dataset = pickle.load(open((args.data_dir+'feature_vectors.pkl'), 'rb'))
+
+def load_data(args, validation_session=5, batch_size=64):
+    #dataset = pickle.load(open((args.data_dir+'feature_vectors.pkl'), 'rb'))
     #filter the dataset with label values between 0 and 3
-
-    print('Number of data points: {}'.format(len(dataset['label'])))
-    print('Number of data points after filtering: {}'.format(len(filtered_dataset['label'])))
-    breakpoint()
-    train_ratio = 0.8
-
-    # Calculate the number of data points in the train and test sets
-    num_train = int(len(dataset['label']) * train_ratio)
-    num_test = len(dataset['label']) - num_train
-
-    # Create a list of indices for the train and test sets
-    indices = list(range(len(dataset['label'])))
-    random.shuffle(indices)
-    train_indices = indices[:num_train]
-    test_indices = indices[num_train:]
-
-    # Split the data into train and test sets
-    train_dataset = {}
-    test_dataset = {}
-    for key in dataset:
-        train_dataset[key] = [dataset[key][i] for i in train_indices]
-        test_dataset[key] = [dataset[key][i] for i in test_indices]
-
-    train_dataset = CustomDataset(train_dataset)
-    test_dataset = CustomDataset(test_dataset)
-    trainloader = torch.utils.data.DataLoader(train_dataset, batch_size=32, shuffle=True, collate_fn=collate_fn)
-    testloader = torch.utils.data.DataLoader(test_dataset, batch_size=32, shuffle=True, collate_fn=collate_fn)
-
-    #check below code of reweighting and run training 
-    #breakpoint()
-    #testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size)
-
-
-    
-    '''session1 = [file_name for file_name in file_names if 'Ses01' in file_name]
-    session2 = [file_name for file_name in file_names if 'Ses02' in file_name]
-    session3 = [file_name for file_name in file_names if 'Ses03' in file_name]
-    session4 = [file_name for file_name in file_names if 'Ses04' in file_name]
-    session5 = [file_name for file_name in file_names if 'Ses05' in file_name]'''
-    
-    
-    
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--data_dir', type=str, default='/home/sgowrira/domain_adaptation/LSTM-DENSE/speech-emotion-recognition-iemocap/preprocess_info/', help='path to dataset')
-    args = parser.parse_args()
-    load_data(args)
-
-
-
-'''data_dir = '/home/user/shaheen.perveen/SER_new/IEMOCAP_image_data'
-model_save_path = '/home/user/shaheen.perveen/SER_new/saved_models'
-train_dir = data_dir + '/train'
-test_dir = data_dir + '/test'
-
-batch_size = 64
-
-train_transforms = transforms.Compose([transforms.Resize(256),
+    dataset_path = args.data_dir
+    #input image is stored as tensor
+    train_transforms = transforms.Compose([transforms.ToPILImage(),
+                                       transforms.Resize(256),
                                        transforms.CenterCrop(224),
                                        transforms.ToTensor(),
-                                       transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])])
+                                       transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+                                       ])
     
-test_transforms = transforms.Compose([transforms.Resize(256),
+    val_transforms = transforms.Compose([transforms.ToPILImage(),
+                                   transforms.Resize(256),
                                    transforms.CenterCrop(224),
                                    transforms.ToTensor(),
-                                   transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])])
+                                   transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+                                   ])
+    dataset = CustomDataset(dataset_path, 'train', validation_session, train_transforms)
+    val_dataset = CustomDataset(dataset_path, 'val', validation_session, val_transforms)
+    print('dataset ',dataset.__len__())
 
-trainset = datasets.ImageFolder(train_dir,transform=train_transforms)
-testset = datasets.ImageFolder(test_dir,transform=test_transforms)
+    trainloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
+    valloader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=True)
 
-trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True)
-testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size)
+    for i, (inputs, labels) in enumerate(trainloader):
+        print(inputs.shape)
+        print(labels)
+        print('dataloader is working')
+        break
+    #print('Training batches are {} and examples are {}'.format(len(trainloader), len(trainloader.dataset)))
+    #print('Validation batches are {} and examples are {}'.format(len(valloader), len(valloader.dataset)))
+    return trainloader, valloader
 
-print(len(testloader.dataset))
-
-print(len(trainloader.dataset))
-
-# def scale(x, out_range=(-1, 1)):
-#     domain = np.min(x), np.max(x)
-#     y = (x - (domain[1] + domain[0]) / 2) / (domain[1] - domain[0])
-#     return y * (out_range[1] - out_range[0]) + (out_range[1] + out_range[0]) / 2
-
-def scale(x):
-    return (x - np.min(x))/np.ptp(x)
-
-def imshow(img):
-    img = scale(img)
-#     print(img)
-    plt.imshow(np.transpose(img, (1,2,0)))
+def train(epoch, model, trainloader, criterion, optimizer ):
+    model.train()
+    correct_train = 0
+    train_loss = 0
+    train_acc = 0
     
-dataiter = iter(trainloader)
-images, labels = dataiter.next()
-images = images.numpy()
-
-fig = plt.figure(figsize=(20,5))
-
-for idx in np.arange(16):
-    ax = fig.add_subplot(2, 16/2, idx+1, xticks=[], yticks=[])
-    imshow(images[idx])
-    plt.show()
-
-trainiter = iter(trainloader)
-features, labels = next(trainiter)
-features.shape, labels.shape
-
-torch.cuda.is_available()
-
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-device
-
-print(trainloader.dataset.class_to_idx)
-
-anger = 0
-happiness = 0
-neutral = 0
-sadness = 0
-
-for _, target in trainloader:
-    labels = list(target.numpy())
-    anger += len([x for x in labels if x == 0])
-    happiness += len([x for x in labels if x == 1])
-    neutral += len([x for x in labels if x == 2])
-    sadness += len([x for x in labels if x == 3])
+    for batch_idx, (data, target) in enumerate(trainloader):
+        data, target = data.to(device), target.to(device)
+        print(data.shape)
+        
+        # zero the gradient, forward, backward and running pytorch rhythm
+        optimizer.zero_grad()
+        output = model(data)
+        loss = criterion(output, target)
+        loss.backward()
+        optimizer.step()
+        
+        train_loss += loss.item()
+        # get the label of prediction
+        pred = torch.max(output.data, 1)[1]
+        correct_train += pred.eq(target.data.view_as(pred)).cpu().sum()
+        
+        if batch_idx % 10 == 0:
+            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}\n'.format(
+                epoch, batch_idx * len(data), len(trainloader.dataset),
+                100. * batch_idx / len(trainloader), loss.item()))
     
-for _, target in testloader:
-    labels = list(target.numpy())
-    anger += len([x for x in labels if x == 0])
-    happiness += len([x for x in labels if x == 1])
-    neutral += len([x for x in labels if x == 2])
-    sadness += len([x for x in labels if x == 3])
+    train_loss /= len(trainloader.dataset)
+    train_acc = 100. * correct_train / len(trainloader.dataset)
+    print('\nTrain set: Average loss: {:.4f}\n'.format(train_loss))
+    print('\nTrain Accuracy: {}/{} ({:.0f}%)\n'.format(
+        correct_train, len(trainloader.dataset), 100. * correct_train / len(trainloader.dataset)))
+    
+    return train_loss, int(train_acc.numpy())
 
-print("anger {} happiness {} neutral {} sadness {}".format(anger, happiness, neutral, sadness))
 
-sample_weights = [1/anger, 1/happiness, 1/neutral, 1/sadness]
-class_weights = torch.FloatTensor(sample_weights).cuda()
-class_weights
+def test(model, valloader, criterion):
+    model.eval()
+    test_loss = 0
+    test_acc = 0
+    correct = 0
+    history_test = []
 
-keep_prob = 0.5
+    pred_model = []
+    actual = []
 
-class CNN(torch.nn.Module):
+    for data, target in valloader:
+        data, target = data.to(device), target.to(device)
 
-    def __init__(self):
-        super(CNN, self).__init__()
-        # L1 ImgIn shape=(?, 224, 224, 3)
-        #    Conv     -> (?, 224, 224, 16)
-        #    Pool     -> (?, 112, 112, 16)
-        self.layer1 = torch.nn.Sequential(
-            torch.nn.Conv2d(3, 16, kernel_size=3, stride=1, padding=1),
-            torch.nn.ReLU(),
-            torch.nn.MaxPool2d(kernel_size=2, stride=2),
-            torch.nn.Dropout(p=1 - keep_prob))
-        # L2 ImgIn shape=(?, 112, 112, 16)
-        #    Conv      ->(?, 112, 112, 32)
-        #    Pool      ->(?, 56, 56, 32)
-        self.layer2 = torch.nn.Sequential(
-            torch.nn.Conv2d(16, 32, kernel_size=3, stride=1, padding=1),
-            torch.nn.ReLU(),
-            torch.nn.MaxPool2d(kernel_size=2, stride=2),
-            torch.nn.Dropout(p=1 - keep_prob))
-        # L3 ImgIn shape=(?, 56, 56, 32)
-        #    Conv      ->(?, 56, 56, 64)
-        #    Pool      ->(?, 28, 28, 64)
-        self.layer3 = torch.nn.Sequential(
-            torch.nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),
-            torch.nn.ReLU(),
-            torch.nn.MaxPool2d(kernel_size=2, stride=2),
-            torch.nn.Dropout(p=1 - keep_prob))
-        
-        # L4 ImgIn shape=(?, 28, 28, 64)
-        #    Conv      ->(?, 28, 28, 16)
-        #    Pool      ->(?, 14, 14, 16)
-        self.layer4 = torch.nn.Sequential(
-            torch.nn.Conv2d(64, 16, kernel_size=1, stride=1),
-            torch.nn.ReLU(),
-            torch.nn.MaxPool2d(kernel_size=2, stride=2),
-            torch.nn.Dropout(p=1 - keep_prob))
+        # output from model
+        output = model(data)
 
-        # L4 FC 14x14x16 inputs -> 512 outputs
-        self.fc1 = torch.nn.Linear(14 * 14 * 16, 512, bias=True)
-        torch.nn.init.xavier_uniform(self.fc1.weight)
-#         self.layer4 = torch.nn.Sequential(
-#             self.fc1,
-#             torch.nn.ReLU(),
-#             torch.nn.Dropout(p=1 - keep_prob))
-        # L5 Final FC 1024 inputs -> 512 outputs
-        
-        self.fc2 = torch.nn.Linear(512, 4, bias=True)
-        torch.nn.init.xavier_uniform_(self.fc2.weight) # initialize parameters
-        # L6 Final FC 512 inputs -> 4 outputs
-#         self.fc3 = torch.nn.Linear(512, 4, bias=True)
-#         torch.nn.init.xavier_uniform_(self.fc3.weight) # initialize parameters
+        # sum total loss
+        test_loss += criterion(output, target).item()
 
-        self.dropout = nn.Dropout(p=0.3)
+        # get the label of prediction
+        pred = torch.max(output.data, 1)[1]
+        correct += pred.eq(target.data.view_as(pred)).cpu().sum()
 
-    def forward(self, x):
-        out = self.layer1(x)
-        out = self.layer2(out)
-        out = self.layer3(out)
-        out = self.layer4(out)
-#         print(out.size())
-        out = out.view(out.size(0), -1)
-#         print(out.size())# Flatten them for FC
-        out = self.fc1(out)
-        out = self.dropout(out)
-        out = self.fc2(out)
-#         out = self.fc3(out)
-        return out
+        pred_model.append(pred.cpu().numpy())
+        actual.append(target.data.cpu().numpy())
 
-class DiagonalLinear(nn.Module):
-    def __init__(self, input_size, output_size):
-        super(DiagonalLinear, self).__init__()
-        self.weight = nn.Parameter(torch.ones(output_size, input_size))
-        # Set non-diagonal elements to be constant
-        with torch.no_grad():
-            self.weight.fill_diagonal_(1)
-            for i in range(input_size):
-                for j in range(output_size):
-                    if i != j:
-                        self.weight[j, i] = 0.0
-                        self.weight[j, i].requires_grad = False
 
-    def forward(self, x):
-        return torch.matmul(x,self.weight) 
+    test_loss /= len(valloader.dataset)
+    test_acc = 100. * correct / len(valloader.dataset)
+    print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
+        test_loss, correct, len(valloader.dataset),
+        100. * correct / len(valloader.dataset)))
+
+
+    #pred_with_label = [label_to_class[label] for label in list(np.concatenate(pred_model))]
+    #actual_with_label = [label_to_class[label] for label in list(np.concatenate(actual))]
+
+    #confusion_matrix(actual_with_label, pred_with_label, labels=final_labels)
+
+    #print('\n Classification Report \n {} \n'.format(classification_report(actual_with_label, pred_with_label)))
+
+    return test_loss, int(test_acc.numpy())
+            
 
 
 
-# Define the scaling network
-import torch.nn as nn
+
 
 class Crude_Diag(nn.Module):
     def __init__(self, in_features):
@@ -338,6 +227,7 @@ class CNN(torch.nn.Module):
         # L1 ImgIn shape=(?, 224, 224, 3)
         #    Conv     -> (?, 224, 224, 16)
         #    Pool     -> (?, 112, 112, 16)
+        keep_prob = 0.5
         self.layer1 = torch.nn.Sequential(
             torch.nn.Conv2d(3, 16, kernel_size=3, stride=1, padding=1),
             torch.nn.ReLU(),
@@ -390,6 +280,7 @@ class CNN(torch.nn.Module):
         self.dropout = nn.Dropout(p=0.3)
 
     def forward(self, x):
+        #x= x.reshape(x.shape[0],1,x.shape[1],x.shape[2])
         out = self.layer1(x)
         out = self.layer2(out)
         out = self.layer3(out)
@@ -404,251 +295,112 @@ class CNN(torch.nn.Module):
         out = self.fc2(out)
 #         out = self.fc3(out)
         return out
+    
 
-# Create an instance of the scaling network
-scale_net = Crude_Diag(4)
-# scale_net = DiagonalLinear(4,4)
-
-# Scale some input data
-input = torch.tensor([[1.0, 2.0, 3.0,4.0]])
-scaled_input = scale_net(input)
-# scaled_input = scale_net(input)
-
-# Print the scaled input
-print(scaled_input)
-
-model = CNN()
+        
 def count_parameters(model):
-    return sum(p.numel() for p in model.parameters() if p.requires_grad)     
-
-print("network before turning off sparse layer", count_parameters(model))
-
-for param in model.Diag_Affine.parameters():
-    param.requires_grad = False     
-print("network after turning off sparse layer", count_parameters(model))
-model = CNN()
-
-print(model)
-
-criterion = nn.CrossEntropyLoss(weight=class_weights)
-
-# optimizer = optim.Adam(model.parameters(), lr=0.0001)
-# exp_lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.1)
-optimizer = torch.optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
-
-model = model.to(device)
-
-total_params = sum(p.numel() for p in model.parameters())
-print(f'{total_params:,} total parameters.')
-total_trainable_params = sum(
-    p.numel() for p in model.parameters() if p.requires_grad)
-print(f'{total_trainable_params:,} training parameters.')
-
-labels = list(trainloader.dataset.class_to_idx.keys())
-labels
-#2,157,620 total parameters.
-
-def plot_confusion_matrix(actual, predicted, labels):
-    cm = confusion_matrix(actual, predicted, labels)
-    ax= plt.subplot()
-    sns.heatmap(cm, annot=True, ax = ax, annot_kws={"size": 10}, fmt='.0f'); #annot=True to annotate cells
-
-    # labels, title and ticks
-    ax.set_xlabel('Predicted labels');ax.set_ylabel('True labels'); 
-    ax.set_title('Confusion Matrix'); 
-    ax.xaxis.set_ticklabels(labels); ax.yaxis.set_ticklabels(labels);
-    plt.show()
-
-label_to_class = {value: key for key, value in trainloader.dataset.class_to_idx.items()}
-label_to_class
-
-def train(epoch, model):
-    model.train()
-    correct_train = 0
-    train_loss = 0
-    train_acc = 0
+    return sum(p.numel() for p in model.parameters() if p.requires_grad) 
     
+
+def main(args):
     
-    for batch_idx, (data, target) in enumerate(trainloader):
-        data, target = data.to(device), target.to(device)
+    for val_ses in range(1, 6):
+
+        config = {
+            "learning_rate": 0.001,
+            "batch_size": 64,
+            "epochs": 100,
+            "architecture": "CNN",
+        } 
         
-        # zero the gradient, forward, backward and running pytorch rhythm
-        optimizer.zero_grad()
-        output = model(data)
-        loss = criterion(output, target)
-        loss.backward()
-        optimizer.step()
+        trainloader, valloader = load_data(args, val_ses, config['batch_size'])
+        print('Validation session is {}'.format(val_ses))
+        print('Training batches are {} and examples are {}'.format(len(trainloader), len(trainloader.dataset)))
+        print('Validation batches are {} and examples are {}'.format(len(valloader), len(valloader.dataset)))
+
+        model = CNN()
+        model.to(device)
+
+    
+
+        print("network before turning off sparse layer", count_parameters(model))
+
+        for param in model.Diag_Affine.parameters():
+            param.requires_grad = False     
+        print("network after turning off sparse layer", count_parameters(model))
+
+
+
+
+        #print(trainloader.dataset.class_to_idx)
+        anger = 0
+        happiness = 0
+        neutral = 0
+        sadnes = 0
+        for i, (inputs, labels) in enumerate(trainloader):
+            labels = list(labels.numpy())
+            anger += labels.count(0)
+            happiness += labels.count(1)
+            neutral += labels.count(2)
+            sadnes += labels.count(3)
+        for i, (inputs, labels) in enumerate(valloader):
+            labels = list(labels.numpy())
+            anger += labels.count(0)
+            happiness += labels.count(1)
+            neutral += labels.count(2)
+            sadnes += labels.count(3)
+
+        print('Anger: {}, Happiness: {}, Neutral: {}, Sadness: {}'.format(anger, happiness, neutral, sadnes))
+        sample_weights = [1/anger, 1/happiness, 1/neutral, 1/sadnes]
+        class_weights = torch.FloatTensor(sample_weights).cuda()
+
+        criterion = nn.CrossEntropyLoss(weight=class_weights)
+        optimizer = torch.optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
+
+        wandb.login(key="a94b61c6268e685bc180a0634fae8dc030cd8ed4") #API Key is in your wandb account, under settings (wandb.ai/settings)
         
-        train_loss += loss.item()
-        # get the label of prediction
-        pred = torch.max(output.data, 1)[1]
-        correct_train += pred.eq(target.data.view_as(pred)).cpu().sum()
+        # Create your wandb run
+        run = wandb.init(
+            name    = "initial_run_validation_session_{}".format(val_ses), ### Wandb creates random run names if you skip this field, we recommend you give useful names
+            reinit  = True, ### Allows reinitalizing runs when you re-run this cell
+            project = "IDL_Project", ### Project should be created in your wandb account 
+            config  = config, ### Wandb Config for your run
+            entity="sgowrira"
+        )
+
+        history, n_epoch = [], config["epochs"]
+        best_val_acc = 0
         
-        if batch_idx % 10 == 0:
-            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}\n'.format(
-                epoch, batch_idx * len(data), len(trainloader.dataset),
-                100. * batch_idx / len(trainloader), loss.item()))
+        for epoch in range(1, n_epoch):    
+            # exp_lr_scheduler.step(epoch)
+            # import pdb
+            # pdb.set_trace()
+            train_loss, train_acc = train(epoch, model, trainloader, criterion, optimizer)
+            test_loss, test_acc = test(model, valloader, criterion)
+            wandb.log({"train_loss": train_loss, "train_acc": train_acc, "test_loss": test_loss, "test_acc": test_acc})
+            if test_acc > best_val_acc:
+                best_val_acc = test_acc
+                torch.save(model.state_dict(), 'best_model_session_{}.pt'.format(val_ses))
+
+
+            
+            # plateau_scheduler.step(test_loss)
+            history.append([train_loss, train_acc, test_loss, test_acc])
+
+        run.finish()
+
+        history_df = pd.DataFrame(history, columns=["train_loss", "train_acc", "test_loss", "test_acc"])
+        history_df["epoch"] = [x for x in range(1, n_epoch)]
+        print(history_df)
+ 
     
-    train_loss /= len(trainloader.dataset)
-    train_acc = 100. * correct_train / len(trainloader.dataset)
-    print('\nTrain set: Average loss: {:.4f}\n'.format(train_loss))
-    print('\nTrain Accuracy: {}/{} ({:.0f}%)\n'.format(
-        correct_train, len(trainloader.dataset), 100. * correct_train / len(trainloader.dataset)))
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--data_dir', type=str, default='/home/sgowrira/domain_adaptation/LSTM-DENSE/speech-emotion-recognition-iemocap/preprocess_info/images/', help='path to dataset')
+    args = parser.parse_args()
+    main(args)
     
-    return train_loss, int(train_acc.numpy())
-
-def test(model):
-    model.eval()
-    test_loss = 0
-    test_acc = 0
-    correct = 0
-    history_test = []
-
-    pred_model = []
-    actual = []
-
-    for data, target in testloader:
-        data, target = data.to(device), target.to(device)
-
-        # output from model
-        output = model(data)
-
-        # sum total loss
-        test_loss += criterion(output, target).item()
-
-        # get the label of prediction
-        pred = torch.max(output.data, 1)[1]
-        correct += pred.eq(target.data.view_as(pred)).cpu().sum()
-
-        pred_model.append(pred.cpu().numpy())
-        actual.append(target.data.cpu().numpy())
 
 
-    test_loss /= len(testloader.dataset)
-    test_acc = 100. * correct / len(testloader.dataset)
-    print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
-        test_loss, correct, len(testloader.dataset),
-        100. * correct / len(testloader.dataset)))
-
-
-    pred_with_label = [label_to_class[label] for label in list(np.concatenate(pred_model))]
-    actual_with_label = [label_to_class[label] for label in list(np.concatenate(actual))]
-
-    plot_confusion_matrix(actual_with_label, pred_with_label, labels)
-
-    print('\n Classification Report \n {} \n'.format(classification_report(actual_with_label, pred_with_label)))
-
-    return test_loss, int(test_acc.numpy())
-
-history = []
-n_epoch = 61
-for epoch in range(1, n_epoch):
-#     exp_lr_scheduler.step(epoch)
-    
-    train_loss, train_acc = train(epoch, model)
-    
-    test_loss, test_acc = test(model)
-    
-#     plateau_scheduler.step(test_loss)
-    
-    history.append([train_loss, train_acc, test_loss, test_acc])
-
-history_df = pd.DataFrame(history, columns=["train_loss", "train_acc", "test_loss", "test_acc"])
-
-history_df["epoch"] = [x for x in range(1, n_epoch)]
-
-history_df
-
-sns.set()
-sns.lineplot(x='epoch', y='train_loss', data=history_df, color='b')
-# plt.xticks(history_df.epoch)
-sns.lineplot(x='epoch', y='test_loss', data=history_df, color='g')
-plt.ylabel("loss")
-plt.show()
-
-sns.set()
-sns.lineplot(x='epoch', y='train_acc', data=history_df, color='b')
-# plt.xticks(history_df.epoch)
-sns.lineplot(x='epoch', y='test_acc', data=history_df, color='g')
-plt.show()
-
-torch.save(model, model_save_path + '/CNN_unfreeze.pth')
-
-model = torch.load(model_save_path + '/CNN_unfreeze.pth')
-
-for param in model.parameters():
-    param.requires_grad = False
-
-ct = 0
-for child in model.children():
-    ct += 1
-#     print(ct)
-    if ct > 3:
-        print("child", ct, "was not frozen")
-        for param in child.parameters():
-            param.requires_grad = True
-    else:
-        print("child", ct, "was frozen")
-
-# for param in model.parameters():
-#     param.requires_grad = True
-
-# optimizer = optim.Adam(model.parameters(), lr=0.003)
-# exp_lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.1)
-optimizer = torch.optim.SGD(model.parameters(), lr=0.0001)
-
-total_params = sum(p.numel() for p in model.parameters())
-print(f'{total_params:,} total parameters.')
-total_trainable_params = sum(
-    p.numel() for p in model.parameters() if p.requires_grad)
-print(f'{total_trainable_params:,} training parameters.')
-
-model = model.to(device)
-
-history_unfreeze = []
-n_epoch_unfrz = 6
-for epoch in range(1, n_epoch_unfrz):
-#     exp_lr_scheduler.step(epoch)
-    
-    train_loss, train_acc = train(epoch, model)
-    
-    test_loss, test_acc = test(model)
-    
-    history_unfreeze.append([train_loss, train_acc, test_loss, test_acc])
-
-history_df_unfrz = pd.DataFrame(history_unfreeze, columns=["train_loss", "train_acc", "test_loss", "test_acc"])
-
-history_df_unfrz["epoch"] = [x for x in range(n_epoch, n_epoch + n_epoch_unfrz - 1)]
-
-history_df_unfrz
-
-sns.set()
-sns.lineplot(x='epoch', y='train_loss', data=history_df_unfrz, color='b')
-sns.lineplot(x='epoch', y='test_loss', data=history_df_unfrz, color='g')
-plt.show()
-# plt.xticks()
-
-sns.set()
-sns.lineplot(x='epoch', y='train_acc', data=history_df_unfrz, color='b')
-sns.lineplot(x='epoch', y='test_acc', data=history_df_unfrz, color='g')
-plt.show()
-# plt.xticks()
-
-torch.save(model, model_save_path + '/ResNet34_UnFreeze_Weights.pth')
-
-history_total = pd.concat([history_df, history_df_unfrz])
-
-history_total
-
-sns.set()
-sns.lineplot(x='epoch', y='train_loss', data=history_total, color='b')
-sns.lineplot(x='epoch', y='test_loss', data=history_total, color='g')
-plt.show()
-# plt.xticks()
-
-sns.set()
-sns.lineplot(x='epoch', y='train_acc', data=history_total, color='b')
-sns.lineplot(x='epoch', y='test_acc', data=history_total, color='g')
-plt.show()
-# plt.xticks()'''
 

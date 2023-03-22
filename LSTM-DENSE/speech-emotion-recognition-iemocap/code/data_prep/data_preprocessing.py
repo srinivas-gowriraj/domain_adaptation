@@ -168,7 +168,7 @@ def createImageData(args):
         fig1 = plt.gcf()
         plt.axis('off')
         plt.draw()
-        save_dir = args.output_dir+'images/'+emotion_full_dict[labels[i]]+'/'
+        save_dir = args.output_dir+'images_new/'+emotion_full_dict[labels[i]]+'/'
         if not os.path.exists(save_dir):
             os.makedirs(save_dir)
         save_path = save_dir+filenames[i]+'.jpg'
