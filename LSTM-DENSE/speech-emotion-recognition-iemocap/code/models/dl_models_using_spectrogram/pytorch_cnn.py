@@ -36,78 +36,107 @@ import torch.nn as nn
 
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-print('Device being used is {}'.format(device))
+#print('Device being used is {}'.format(device))
+
 
 
 classes = {'angry':0, 'happiness':1, 'excited':2, 'neutral':3} 
 
 class CustomDataset(Dataset):
-    def __init__(self, dataset_path, split, val_session, transform):
-        #breakpoint()
-        self.transform = transform
-        emotion_dirs = os.listdir(dataset_path)
-        self.spectrogram = []
-        self.labels = []
-        for emotion_dir in emotion_dirs:
-            for image in os.listdir(os.path.join(dataset_path, emotion_dir)):
-                #if extension not is not .jpg, skip
-                if image.split('.')[-1] != 'jpg':
-                    continue
-                image_session = image.split('_')[0]
-                image_session = int(re.search(r'\d+', image_session).group(0))
-                if split == 'train':
-                    if image_session != val_session:
-                        #breakpoint()
-                        self.spectrogram.append(os.path.join(dataset_path, emotion_dir, image))
-                        self.labels.append(classes[emotion_dir])
-                else:
-                    if image_session == val_session:
-                        self.spectrogram.append(os.path.join(dataset_path, emotion_dir, image))
-                        self.labels.append(classes[emotion_dir])
+    def __init__(self, dataset):
         
+        self.mfccs = dataset['mfccs']
+        self.labels = dataset['label']
+        self.filename = dataset['wav_file']    
 
     def __len__(self):
-        return len(self.spectrogram)
+        return len(self.mfccs)
 
     def __getitem__(self, idx):
-        #breakpoint()
-        return self.transform(read_image(self.spectrogram[idx])), torch.tensor(self.labels[idx])
-
-
-
-def load_data(args, validation_session=5, batch_size=64):
-    #dataset = pickle.load(open((args.data_dir+'feature_vectors.pkl'), 'rb'))
-    #filter the dataset with label values between 0 and 3
-    dataset_path = args.data_dir
-    #input image is stored as tensor
-    train_transforms = transforms.Compose([transforms.ToPILImage(),
-                                       transforms.Resize(256),
-                                       transforms.CenterCrop(224),
-                                       transforms.ToTensor(),
-                                       transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-                                       ])
+        return torch.tensor(self.mfccs[idx]), torch.tensor(self.labels[idx]), self.filename[idx]
     
-    val_transforms = transforms.Compose([transforms.ToPILImage(),
-                                   transforms.Resize(256),
-                                   transforms.CenterCrop(224),
-                                   transforms.ToTensor(),
-                                   transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-                                   ])
-    dataset = CustomDataset(dataset_path, 'train', validation_session, train_transforms)
-    val_dataset = CustomDataset(dataset_path, 'val', validation_session, val_transforms)
-    print('dataset ',dataset.__len__())
+def collate_fn(batch):
+    # Determine the maximum length of the spectrograms in the batch
+    max_len = max(mfcc.shape[1] for mfcc, label, filename in batch)
 
-    trainloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
-    valloader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=True)
+    # Pad the spectrograms with zeros to the maximum length
+    padded_mfcc = []
+    for mfcc, label, filename in batch:
+        num_cols = mfcc.shape[1]
+        padding = torch.zeros((13, max_len - num_cols))
+        padded_mfcc.append(torch.cat([mfcc, padding], dim=1))
 
-    for i, (inputs, labels) in enumerate(trainloader):
+     # Concatenate the padded spectrograms into a tensor
+    mfcc_tensor = torch.stack(padded_mfcc, dim=0)
+
+     # Convert the labels to PyTorch tensor
+    labels_tensor = torch.tensor([label for mfcc, label, filename in batch])
+
+     # Create a list of filenames
+    filenames_list = [filename for spec, label, filename in batch]
+
+    return mfcc_tensor, labels_tensor, filenames_list
+
+
+
+def load_data(args, batch_size=64):
+    dataset = pickle.load(open((args.data_dir+'feature_vectors.pkl'), 'rb'))
+    
+    spectograms = []
+    labels = []
+    filenames = []
+    mfccs = []
+    for i in range(len(dataset['label'])):
+        if dataset['label'][i] in [0,1,3,7]:
+            spectograms.append(dataset['spec_db'][i])
+            labels.append(dataset['label'][i])
+            filenames.append(dataset['wav_file'][i])
+            mfccs.append(dataset['mfccs'][i])
+            
+    dataset['label'] = labels
+    dataset['spec_db'] = spectograms
+    dataset['mfccs'] = mfccs
+    dataset['wav_file'] = filenames
+
+    emotion_full_dict = {0:'angry', 1:'happiness', 3:'excited', 7:'neutral'}
+    
+    print('Number of data points: {}'.format(len(dataset['label'])))
+    #print('Number of data points after filtering: {}'.format(len(filtered_dataset['label'])))
+    #breakpoint()
+    train_ratio = 0.8
+
+    # Calculate the number of data points in the train and test sets
+    num_train = int(len(dataset['label']) * train_ratio)
+    num_test = len(dataset['label']) - num_train
+
+    # Create a list of indices for the train and test sets
+    indices = list(range(len(dataset['label'])))
+    random.shuffle(indices)
+    train_indices = indices[:num_train]
+    test_indices = indices[num_train:]
+
+    # Split the data into train and test sets
+    train_dataset = {}
+    test_dataset = {}
+    for key in dataset:
+        train_dataset[key] = [dataset[key][i] for i in train_indices]
+        test_dataset[key] = [dataset[key][i] for i in test_indices]
+
+    train_dataset = CustomDataset(train_dataset)
+    test_dataset = CustomDataset(test_dataset)
+    trainloader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_fn)
+    testloader = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_fn)
+    
+    
+    for i, (inputs, labels, filenames) in enumerate(trainloader):
         print(inputs.shape)
         print(labels)
         print('dataloader is working')
         break
+    #breakpoint()
     #print('Training batches are {} and examples are {}'.format(len(trainloader), len(trainloader.dataset)))
     #print('Validation batches are {} and examples are {}'.format(len(valloader), len(valloader.dataset)))
-    return trainloader, valloader
+    return trainloader, testloader
 
 def train(epoch, model, trainloader, criterion, optimizer ):
     model.train()
@@ -304,100 +333,99 @@ def count_parameters(model):
 
 def main(args):
     
-    for val_ses in range(1, 6):
+    config = {
+        "learning_rate": 0.001,
+        "batch_size": 64,
+        "epochs": 100,
+        "architecture": "CNN",
+    } 
 
-        config = {
-            "learning_rate": 0.001,
-            "batch_size": 64,
-            "epochs": 100,
-            "architecture": "CNN",
-        } 
-        
-        trainloader, valloader = load_data(args, val_ses, config['batch_size'])
-        print('Validation session is {}'.format(val_ses))
-        print('Training batches are {} and examples are {}'.format(len(trainloader), len(trainloader.dataset)))
-        print('Validation batches are {} and examples are {}'.format(len(valloader), len(valloader.dataset)))
+    trainloader, valloader = load_data(args, config['batch_size'])
+    #print('Validation session is {}'.format(val_ses))
+    print('Training batches are {} and examples are {}'.format(len(trainloader), len(trainloader.dataset)))
+    print('Validation batches are {} and examples are {}'.format(len(valloader), len(valloader.dataset)))
+    sys.exit()
 
-        model = CNN()
-        model.to(device)
-
-    
-
-        print("network before turning off sparse layer", count_parameters(model))
-
-        for param in model.Diag_Affine.parameters():
-            param.requires_grad = False     
-        print("network after turning off sparse layer", count_parameters(model))
+    model = CNN()
+    model.to(device)
 
 
 
+    print("network before turning off sparse layer", count_parameters(model))
 
-        #print(trainloader.dataset.class_to_idx)
-        anger = 0
-        happiness = 0
-        neutral = 0
-        sadnes = 0
-        for i, (inputs, labels) in enumerate(trainloader):
-            labels = list(labels.numpy())
-            anger += labels.count(0)
-            happiness += labels.count(1)
-            neutral += labels.count(2)
-            sadnes += labels.count(3)
-        for i, (inputs, labels) in enumerate(valloader):
-            labels = list(labels.numpy())
-            anger += labels.count(0)
-            happiness += labels.count(1)
-            neutral += labels.count(2)
-            sadnes += labels.count(3)
-
-        print('Anger: {}, Happiness: {}, Neutral: {}, Sadness: {}'.format(anger, happiness, neutral, sadnes))
-        sample_weights = [1/anger, 1/happiness, 1/neutral, 1/sadnes]
-        class_weights = torch.FloatTensor(sample_weights).cuda()
-
-        criterion = nn.CrossEntropyLoss(weight=class_weights)
-        optimizer = torch.optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
-
-        wandb.login(key="a94b61c6268e685bc180a0634fae8dc030cd8ed4") #API Key is in your wandb account, under settings (wandb.ai/settings)
-        
-        # Create your wandb run
-        run = wandb.init(
-            name    = "initial_run_validation_session_{}".format(val_ses), ### Wandb creates random run names if you skip this field, we recommend you give useful names
-            reinit  = True, ### Allows reinitalizing runs when you re-run this cell
-            project = "IDL_Project", ### Project should be created in your wandb account 
-            config  = config, ### Wandb Config for your run
-            entity="sgowrira"
-        )
-
-        history, n_epoch = [], config["epochs"]
-        best_val_acc = 0
-        
-        for epoch in range(1, n_epoch):    
-            # exp_lr_scheduler.step(epoch)
-            # import pdb
-            # pdb.set_trace()
-            train_loss, train_acc = train(epoch, model, trainloader, criterion, optimizer)
-            test_loss, test_acc = test(model, valloader, criterion)
-            wandb.log({"train_loss": train_loss, "train_acc": train_acc, "test_loss": test_loss, "test_acc": test_acc})
-            if test_acc > best_val_acc:
-                best_val_acc = test_acc
-                torch.save(model.state_dict(), 'best_model_session_{}.pt'.format(val_ses))
+    for param in model.Diag_Affine.parameters():
+        param.requires_grad = False     
+    print("network after turning off sparse layer", count_parameters(model))
 
 
-            
-            # plateau_scheduler.step(test_loss)
-            history.append([train_loss, train_acc, test_loss, test_acc])
 
-        run.finish()
 
-        history_df = pd.DataFrame(history, columns=["train_loss", "train_acc", "test_loss", "test_acc"])
-        history_df["epoch"] = [x for x in range(1, n_epoch)]
-        print(history_df)
- 
+    #print(trainloader.dataset.class_to_idx)
+    anger = 0
+    happiness = 0
+    neutral = 0
+    sadnes = 0
+    for i, (inputs, labels) in enumerate(trainloader):
+        labels = list(labels.numpy())
+        anger += labels.count(0)
+        happiness += labels.count(1)
+        neutral += labels.count(2)
+        sadnes += labels.count(3)
+    for i, (inputs, labels) in enumerate(valloader):
+        labels = list(labels.numpy())
+        anger += labels.count(0)
+        happiness += labels.count(1)
+        neutral += labels.count(2)
+        sadnes += labels.count(3)
+
+    print('Anger: {}, Happiness: {}, Neutral: {}, Sadness: {}'.format(anger, happiness, neutral, sadnes))
+    sample_weights = [1/anger, 1/happiness, 1/neutral, 1/sadnes]
+    class_weights = torch.FloatTensor(sample_weights).cuda()
+
+    criterion = nn.CrossEntropyLoss(weight=class_weights)
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
+
+    wandb.login(key="a94b61c6268e685bc180a0634fae8dc030cd8ed4") #API Key is in your wandb account, under settings (wandb.ai/settings)
+
+    # Create your wandb run
+    run = wandb.init(
+        name    = "initial_run_validation_session_{}".format(val_ses), ### Wandb creates random run names if you skip this field, we recommend you give useful names
+        reinit  = True, ### Allows reinitalizing runs when you re-run this cell
+        project = "IDL_Project", ### Project should be created in your wandb account 
+        config  = config, ### Wandb Config for your run
+        entity="sgowrira"
+    )
+
+    history, n_epoch = [], config["epochs"]
+    best_val_acc = 0
+
+    for epoch in range(1, n_epoch):    
+        # exp_lr_scheduler.step(epoch)
+        # import pdb
+        # pdb.set_trace()
+        train_loss, train_acc = train(epoch, model, trainloader, criterion, optimizer)
+        test_loss, test_acc = test(model, valloader, criterion)
+        wandb.log({"train_loss": train_loss, "train_acc": train_acc, "test_loss": test_loss, "test_acc": test_acc})
+        if test_acc > best_val_acc:
+            best_val_acc = test_acc
+            torch.save(model.state_dict(), 'best_model_session_{}.pt'.format(val_ses))
+
+
+
+        # plateau_scheduler.step(test_loss)
+        history.append([train_loss, train_acc, test_loss, test_acc])
+
+    run.finish()
+
+    history_df = pd.DataFrame(history, columns=["train_loss", "train_acc", "test_loss", "test_acc"])
+    history_df["epoch"] = [x for x in range(1, n_epoch)]
+    print(history_df)
+
     
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--data_dir', type=str, default='/home/sgowrira/domain_adaptation/LSTM-DENSE/speech-emotion-recognition-iemocap/preprocess_info/images/', help='path to dataset')
+    parser.add_argument('--data_dir', type=str, default='/home/sgowrira/domain_adaptation/LSTM-DENSE/speech-emotion-recognition-iemocap/preprocess_info/', help='path to dataset')
     args = parser.parse_args()
     main(args)
     
