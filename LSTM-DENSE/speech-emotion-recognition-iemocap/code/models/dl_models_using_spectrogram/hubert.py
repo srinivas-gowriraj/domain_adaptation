@@ -3,22 +3,35 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from transformers import Wav2Vec2ForSequenceClassification, Wav2Vec2Processor
-from datasets import load_dataset
+from datasets import load_dataset, concatenate_datasets
 import numpy as np
+from tqdm import tqdm
+
 
 # Load the pre-trained Hubert model and its tokenizer
 model = Wav2Vec2ForSequenceClassification.from_pretrained("facebook/hubert-large-ls960-ft")
 processor = Wav2Vec2Processor.from_pretrained("facebook/hubert-large-ls960-ft")
 
 # Load the RAVDESS dataset
-#dataset = load_dataset("ravdess_emotion", split="train")
+
 dataset = load_dataset("superb", "er", data_dir="/home/sgowrira/domain_adaptation/IEMOCAP_full_release")
 #breakpoint()
+
+
+session1 = load_dataset("superb", "er", split='session1', data_dir="/home/sgowrira/domain_adaptation/IEMOCAP_full_release")
+session2 = load_dataset("superb", "er", split='session2', data_dir="/home/sgowrira/domain_adaptation/IEMOCAP_full_release")
+session3 = load_dataset("superb", "er", split='session3', data_dir="/home/sgowrira/domain_adaptation/IEMOCAP_full_release")
+session4 = load_dataset("superb", "er", split='session4', data_dir="/home/sgowrira/domain_adaptation/IEMOCAP_full_release")
+session5 = load_dataset("superb", "er", split='session5', data_dir="/home/sgowrira/domain_adaptation/IEMOCAP_full_release")
+
+train_dataset = concatenate_datasets([session1,session2,session3,session4])
+val_dataset = session5 
+    
 
 # Define the function to preprocess the audio inputs
 def preprocess(inputs, outputs):
     input_features = []
-    for audio_file in inputs:
+    for audio_file in tqdm(inputs):
         input, sr = torchaudio.load(audio_file)
         input_feature = processor(input, sampling_rate=sr, return_tensors="pt", padding=True, truncation=True)
         input_features.append(input_feature.input_values[0])
@@ -26,13 +39,11 @@ def preprocess(inputs, outputs):
     return input_features, torch.tensor(outputs)
 
 # Apply the preprocessing function to the dataset
-inputs, outputs = preprocess(dataset["path"], dataset["emotion"])
-dataset = torch.utils.data.TensorDataset(inputs, outputs)
+train_inputs, train_outputs = preprocess(train_dataset["audio"], train_dataset["label"])
+train_dataset = torch.utils.data.TensorDataset(train_inputs, train_outputs)
 
-# Split the dataset into training and validation sets
-train_size = int(0.8 * len(dataset))
-val_size = len(dataset) - train_size
-train_dataset, val_dataset = torch.utils.data.random_split(dataset, [train_size, val_size])
+val_inputs, val_outputs = preprocess(val_dataset["audio"], val_dataset["label"])
+val_dataset = torch.utils.data.TensorDataset(val_inputs, val_outputs)
 
 # Define the data loaders for the training and validation sets
 train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
@@ -43,7 +54,7 @@ criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=1e-4)
 
 # Fine-tune the model on the dataset
-num_epochs = 10
+num_epochs = 1
 for epoch in range(num_epochs):
     # Training loop
     model.train()
