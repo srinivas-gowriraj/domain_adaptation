@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from transformers import Wav2Vec2ForSequenceClassification, Wav2Vec2Processor
+from transformers import Wav2Vec2ForSequenceClassification, Wav2Vec2Processor, DataCollatorWithPadding
 from datasets import load_dataset, concatenate_datasets
 from torch.utils.data import Dataset, DataLoader
 import numpy as np
@@ -28,12 +28,23 @@ session4 = load_dataset("superb", "er", split='session4', data_dir="IEMOCAP_full
 session5 = load_dataset("superb", "er", split='session5', data_dir="IEMOCAP_full_release")
 
 train_dataset = concatenate_datasets([session1,session2,session3,session4])
-val_dataset = session5 
-    
-import os
-# audio_dir =  train_dataset["audio"]["path"]
+val_dataset = session5
 
-max_length = 0
+def tokenize_function(example):
+    input, sr = torchaudio.load(example['audio']["path"])
+    input_feature = processor(input, sampling_rate=sr, return_tensors="pt", truncation=True) 
+    return input_feature
+
+tokenized_datasets = train_dataset.map(tokenize_function, batched=True)
+data_collator = DataCollatorWithPadding(tokenizer=processor)
+breakpoint()
+
+
+
+
+
+    
+
 
 # Iterate over all audio files in the directory and find the longest one
 # for filename in train_dataset["audio"]:
@@ -48,7 +59,7 @@ max_length = 0
 
 # print("Max length:", max_length)    
 
-import torch
+
 
 def hubert_collate_fn(examples):
     # Sort the examples by descending input length
