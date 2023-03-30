@@ -236,7 +236,7 @@ class Crude_Diag(nn.Module):
                 for j in range(in_features):
                     if i != j:
                         weight[i, j] = 0.0
-                    weight[i, j].requires_grad = False
+                        weight[i, j].requires_grad = False
         
         # Define linear layer with diagonal weight matrix
         self.linear = nn.Linear(in_features, in_features, bias=False)
@@ -326,6 +326,20 @@ def main(args):
 
     for param in model.Diag_Affine.parameters():
         param.requires_grad = False     
+    
+    ##***********************************************
+    # Run with NSC
+    
+    for name, param in model.named_parameters():
+        if 'Diag_Affine' in name:
+            for i in range(param.shape[0]):
+                for j in range(param.shape[1]):
+                    param[i][j].requires_grad = True
+        else:
+            param.requires_grad = False
+    
+    ##***************************************************
+    # for param in model.
     # print("network after turning off sparse layer", count_parameters(model))
 
 

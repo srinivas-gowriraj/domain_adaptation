@@ -323,13 +323,9 @@ def main(args):
 
 
     # print("network before turning off sparse layer", count_parameters(model))
-
     for param in model.Diag_Affine.parameters():
         param.requires_grad = False     
     # print("network after turning off sparse layer", count_parameters(model))
-
-
-
 
     #print(trainloader.dataset.class_to_idx)
     anger = 0
