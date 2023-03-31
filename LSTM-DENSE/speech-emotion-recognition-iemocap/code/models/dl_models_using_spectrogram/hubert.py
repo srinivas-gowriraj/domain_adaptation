@@ -28,11 +28,18 @@ session4 = load_dataset("superb", "er", split='session4', data_dir="IEMOCAP_full
 session5 = load_dataset("superb", "er", split='session5', data_dir="IEMOCAP_full_release")
 
 train_dataset = concatenate_datasets([session1,session2,session3,session4])
+
 val_dataset = session5
 
 def tokenize_function(example):
-    input, sr = torchaudio.load(example['audio']["path"])
-    input_feature = processor(input, sampling_rate=sr, return_tensors="pt", truncation=True) 
+    inputs_array = []
+    sr_array = []
+    for file in example["file"]:
+        input, sr = torchaudio.load(file)
+        inputs_array.append(input)
+        sr_array.append(sr)
+        
+    input_feature = processor(inputs_array, sampling_rate=sr, return_tensors="pt") 
     return input_feature
 
 tokenized_datasets = train_dataset.map(tokenize_function, batched=True)
