@@ -80,7 +80,7 @@ def collate_fn(batch):
 
 
 def load_data(args, batch_size=64):
-    dataset = pickle.load(open('/home/arpitsah/Desktop/Projects Fall-22/DA/domain_adaptation/LSTM-DENSE/speech-emotion-recognition-iemocap/preprocess_info/feature_vectors.pkl','rb'))
+    dataset = pickle.load(open('LSTM-DENSE/speech-emotion-recognition-iemocap/preprocess_info/feature_vectors.pkl','rb'))
     
     spectograms = []
     labels = []
@@ -225,7 +225,7 @@ def test(model, valloader, criterion):
 
 
 
-keep_prob =0.5
+keep_prob =0.8
 class Crude_Diag(nn.Module):
     def __init__(self, in_features):
         super(Crude_Diag, self).__init__()
@@ -299,7 +299,7 @@ class CNN(torch.nn.Module):
 #             torch.nn.ReLU(),
 #             torch.nn.Dropout(p=1 - keep_prob))
         # L5 Final FC 1024 inputs -> 512 outputs
-        self.pool =  torch.nn.AdaptiveAvgPool2d((1,1))
+        self.pool =  torch.nn.AdaptiveMaxPool2d((1,1))
         # Affine Layer
         self.fc2 = torch.nn.Linear(384, 50, bias=True)
         self.Diag_Affine = Crude_Diag(50)
@@ -341,7 +341,7 @@ def count_parameters(model):
 def main(args):
     
     config = {
-        "learning_rate": 0.001,
+        "learning_rate": 0.0001,
         "batch_size": 64,
         "epochs": 100,
         "architecture": "CNN",
@@ -357,14 +357,26 @@ def main(args):
     model.to(device)
 
 
-
     # print("network before turning off sparse layer", count_parameters(model))
-
+    # *************************************************
+    # Run with IEMOCAP
     for param in model.Diag_Affine.parameters():
         param.requires_grad = False     
+    
+    ##***********************************************
+    # Run with NSC
+    
+    # for name, param in model.named_parameters():
+    #     if 'Diag_Affine' in name:
+    #         for i in range(param.shape[0]):
+    #             for j in range(param.shape[1]):
+    #                 param[i][j].requires_grad = True
+    #     else:
+    #         param.requires_grad = False
+    
+    ##***************************************************
+    # for param in model.
     # print("network after turning off sparse layer", count_parameters(model))
-
-
 
 
     #print(trainloader.dataset.class_to_idx)
@@ -406,7 +418,7 @@ def main(args):
     # Create your wandb run
     wandb.login(key="207bf381f197203155b01dd8b56293d02aca5365") 
     run = wandb.init(
-    name    = "IEMOCAP baseline-1", 
+    name    = "Iemocap-baseline-cnn", 
     reinit  = True, 
     project = "Domain Adaption",  
     config  = config ### Wandb Config for your run
