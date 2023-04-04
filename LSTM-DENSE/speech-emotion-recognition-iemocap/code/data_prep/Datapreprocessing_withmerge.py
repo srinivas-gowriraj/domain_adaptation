@@ -210,35 +210,67 @@ def combine(args):
     data_neutral = pd.read_pickle(args.output_dir + 'feature_vectors_Neutral.pkl')
 
     all_labels=[]
-    all_labels.append(data_neutral ['label'])
-    all_labels=all_labels[0:100]
-    all_labels.append(data_angry['label'])
-    all_labels.append(data_happy['label'])
-    all_labels.append(data_sad['label'])
-   
+    k=0
+    for i in data_neutral['label']:
+        all_labels.append(i)
+        k=k+1
+        if k==100:
+            break
+    for i in data_angry['label']:
+        all_labels.append(i)
+    for i in data_happy['label']:
+        all_labels.append(i)
+    for i in data_sad['label']:
+        all_labels.append(i)
+
 
     all_spec_db_images=[]
-    all_spec_db_images.append(data_neutral['spec_db'])
-    all_spec_db_images=all_spec_db_images[0:100]
-    all_spec_db_images.append(data_angry['spec_db'])
-    all_spec_db_images.append(data_happy['spec_db'])
-    all_spec_db_images.append(data_sad['spec_db'])
+    k=0
+    for i in data_neutral['spec_db']:
+        all_spec_db_images.append(i)
+        k=k+1
+        if k==100:
+            break
+    for i in data_angry['spec_db']:
+        all_spec_db_images.append(i)
+    for i in data_happy['spec_db']:
+        all_spec_db_images.append(i)
+    for i in data_sad['spec_db']:
+        all_spec_db_images.append(i)
     
+
     
     all_wav_files=[]
-    all_wav_files.append(data_neutral['wav_file'])
-    all_wav_files=all_wav_files[0:100]
-    all_wav_files.append(data_angry['wav_file'])
-    all_wav_files.append(data_happy['wav_file'])
-    all_wav_files.append(data_sad['wav_file'])
+    k=0
+    for i in data_neutral['wav_file']:
+        all_wav_files.append(i)
+        k=k+1
+        if k==100:
+            break
+    for i in data_angry['wav_file']:
+        all_wav_files.append(i)
+    for i in data_happy['wav_file']:
+        all_wav_files.append(i)
+    for i in data_sad['wav_file']:
+        all_wav_files.append(i)
+    
+
     
 
     all_mfccs=[]
-    all_mfccs.append(data_neutral['mfccs'])
-    all_mfccs=all_mfccs[0:100]
-    all_mfccs.append(data_angry['mfccs'])
-    all_mfccs.append(data_happy['mfccs'])
-    all_mfccs.append(data_sad['mfccs'])
+    k=0
+    for i in data_neutral['mfccs']:
+        all_mfccs.append(i)
+        k=k+1
+        if k==100:
+            break
+    for i in data_angry['mfccs']:
+        all_mfccs.append(i)
+    for i in data_happy['mfccs']:
+        all_mfccs.append(i)
+    for i in data_sad['mfccs']:
+        all_mfccs.append(i)
+
 
     final_dictionary = {'wav_file': all_wav_files, 'label': all_labels, 'mfccs': all_mfccs, 'spec_db': all_spec_db_images}
     with open(args.output_dir + 'NSC_datasetset_balaanced.pkl', 'wb') as f:
