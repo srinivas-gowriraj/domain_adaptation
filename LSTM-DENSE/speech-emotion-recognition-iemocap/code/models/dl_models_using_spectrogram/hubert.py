@@ -21,6 +21,7 @@ processor = AutoProcessor.from_pretrained("facebook/hubert-large-ls960-ft")
 torch.cuda.empty_cache()
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model.to(device)
+print(device)
 # Load the RAVDESS dataset
 class Hubert(nn.Module):
     def __init__(self,config):
@@ -66,6 +67,7 @@ session4 = load_dataset("superb", "er", split='session4', data_dir="/home/sgowri
 session5 = load_dataset("superb", "er", split='session5', data_dir="/home/sgowrira/domain_adaptation/IEMOCAP_full_release")
 
 train_dataset = concatenate_datasets([session1,session2,session3,session4])
+#train_dataset = session1
 val_dataset = session5
 
 def create_array_col(dataset):
@@ -89,11 +91,11 @@ tokenized_val_dataset = val_dataset.map(tokenize_function, batched=True, batch_s
 data_collator = DataCollatorWithPadding(tokenizer=processor)
 
 train_dataloader = DataLoader(
-    tokenized_train_dataset, shuffle=True, batch_size=1, collate_fn=data_collator
+    tokenized_train_dataset, shuffle=True, batch_size=4, collate_fn=data_collator
 )
 
 val_dataloader = DataLoader(
-    tokenized_val_dataset, shuffle=True, batch_size=1, collate_fn=data_collator
+    tokenized_val_dataset, shuffle=True, batch_size=4, collate_fn=data_collator
 )
 print("train_datalaoder: ", len(train_dataloader))
 for i, batch in enumerate(train_dataloader):
@@ -112,10 +114,10 @@ optimizer = optim.Adam(model.parameters(), lr=1e-4)
 # print('check 1')
 # !nvidia-smi | grep MiB | awk '{print $9 $10 $11}'
 # Fine-tune the model on the dataset
-print('memory before training: ')
-calculate_memory()
+#print('memory before training: ')
+#calculate_memory()
 gc.collect()
-num_epochs = 1
+num_epochs = 20
 for epoch in range(num_epochs):
     # Training loop
     model.train()
@@ -134,8 +136,8 @@ for epoch in range(num_epochs):
         train_loss += loss.item()
         del inputs, loss, outputs
         torch.cuda.empty_cache()
-        print("memory after each batch")
-        calculate_memory()
+        #print("memory after each batch")
+        #calculate_memory()
         # print(torch.cuda.memory_summary(device=device, abbreviated=False))
 
         # del(inputs)
@@ -150,8 +152,8 @@ for epoch in range(num_epochs):
             outputs = model(input_values=inputs.input_values, attention_mask=inputs.attention_mask)
             loss = criterion(outputs.logits, inputs.labels)
             val_loss += loss.item()
-            preds = np.argmax(outputs.logits.detach().numpy(), axis=1)
-            val_acc += np.sum(preds == inputs.labels.numpy())
+            preds = np.argmax(outputs.logits.detach().cpu().numpy(), axis=1)
+            val_acc += np.sum(preds == inputs.labels.cpu().numpy())
             del inputs, loss,outputs
             torch.cuda.empty_cache()
             # print(torch.cuda.memory_summary(device=device, abbreviated=False))
