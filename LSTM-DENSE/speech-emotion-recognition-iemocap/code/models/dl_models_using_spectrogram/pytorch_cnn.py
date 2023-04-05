@@ -40,7 +40,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 
-classes = {'angry':0, 'happiness':1, 'excited':2, 'neutral':3} 
+classes = {'angry':0, 'happiness':1, 'sad':2, 'neutral':3} 
 
 class CustomDataset(Dataset):
     def __init__(self, dataset):
@@ -79,13 +79,16 @@ def collate_fn(batch):
 
 
 
-def load_data(args, batch_size=64):
-    dataset = pickle.load(open('LSTM-DENSE/speech-emotion-recognition-iemocap/preprocess_info/feature_vectors.pkl','rb'))
+def load_data(args, config):
+    # dataset = pickle.load(open('speech-emotion-recognition-iemocap/preprocess_info/feature_vectors.pkl','rb'))
+    
+    # dataset = pickle.load(open('NSC_part5_labelled_emotion/Preprocessed_filesNSC_datasetset_balaanced.pkl','rb'))
     
     spectograms = []
     labels = []
     filenames = []
     mfccs = []
+    print("Loading Dataset . . .")
     for i in range(len(dataset['label'])):
         if dataset['label'][i] in [0,1,3,7]:
             label = 0
@@ -105,12 +108,12 @@ def load_data(args, batch_size=64):
     dataset['mfccs'] = mfccs
     dataset['wav_file'] = filenames
 
-    emotion_full_dict = {0:'angry', 1:'happiness', 2:'excited', 3:'neutral'}
+    emotion_full_dict = {0:'angry', 1:'happiness', 2:'sad', 3:'neutral'}
     
     # print('Number of data points: {}'.format(len(dataset['label'])))
     #print('Number of data points after filtering: {}'.format(len(filtered_dataset['label'])))
     #breakpoint()
-    train_ratio = 0.8
+    train_ratio = config["train_ratio"]
 
     # Calculate the number of data points in the train and test sets
     num_train = int(len(dataset['label']) * train_ratio)
@@ -131,8 +134,8 @@ def load_data(args, batch_size=64):
 
     train_dataset = CustomDataset(train_dataset)
     test_dataset = CustomDataset(test_dataset)
-    trainloader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_fn)
-    testloader = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_fn)
+    trainloader = torch.utils.data.DataLoader(train_dataset, batch_size=config['batch_size'], shuffle=True, collate_fn=collate_fn)
+    testloader = torch.utils.data.DataLoader(test_dataset, batch_size=config['batch_size'], shuffle=True, collate_fn=collate_fn)
     
     
     for i, (inputs, labels, filenames) in enumerate(trainloader):
@@ -143,6 +146,7 @@ def load_data(args, batch_size=64):
     #breakpoint()
     #print('Training batches are {} and examples are {}'.format(len(trainloader), len(trainloader.dataset)))
     #print('Validation batches are {} and examples are {}'.format(len(valloader), len(valloader.dataset)))
+    print("Dataset Loaded . . .")
     return trainloader, testloader
 
 def train(epoch, model, trainloader, criterion, optimizer ):
@@ -225,115 +229,7 @@ def test(model, valloader, criterion):
 
 
 
-keep_prob =0.8
-class Crude_Diag(nn.Module):
-    def __init__(self, in_features):
-        super(Crude_Diag, self).__init__()
-        
-        # Set a fixed seed for reproducibility
-        torch.manual_seed(0)
-        
-        # Initialize scaling factors and weight matrix
-        scaling_factors = torch.rand(in_features)
-        weight = torch.diag(scaling_factors)
-        
-        # Modify weight matrix to set non-diagonal elements to zero
-        with torch.no_grad():
-            for i in range(in_features):
-                for j in range(in_features):
-                    if i != j:
-                        weight[i, j] = 0.0
-                        weight[i, j].requires_grad = False
-        
-        # Define linear layer with diagonal weight matrix
-        self.linear = nn.Linear(in_features, in_features, bias=False)
-        self.linear.weight = nn.Parameter(weight)
-        
-    def forward(self, x):
-        x = self.linear(x)
-        return x
 
-class CNN(torch.nn.Module):
-
-    def __init__(self):
-        super(CNN, self).__init__()
-        # L1 ImgIn shape=(?, 224, 224, 3)
-        #    Conv     -> (?, 224, 224, 16)
-        #    Pool     -> (?, 112, 112, 16)
-        self.layer1 = torch.nn.Sequential(
-            torch.nn.Conv2d(1, 16, kernel_size=(1,3), stride=(1,2)),
-            torch.nn.ReLU(),
-            # torch.nn.MaxPool2d(kernel_size=2,stride=2),
-            torch.nn.Dropout(p=1 - keep_prob))
-        # L2 ImgIn shape=(?, 112, 112, 16)
-        #    Conv      ->(?, 112, 112, 32)
-        #    Pool      ->(?, 56, 56, 32)
-        self.layer2 = torch.nn.Sequential(
-            torch.nn.Conv2d(16, 32, kernel_size=(1,3), stride=(1,2)),
-            torch.nn.ReLU(),
-            # torch.nn.MaxPool2d(kernel_size=2,stride=2),
-            torch.nn.Dropout(p=1 - keep_prob))
-        # L3 ImgIn shape=(?, 56, 56, 32)
-        #    Conv      ->(?, 56, 56, 64)
-        #    Pool      ->(?, 28, 28, 64)
-        self.layer3 = torch.nn.Sequential(
-            torch.nn.Conv2d(32, 64, kernel_size=(1,3), stride=(1,2)),
-            torch.nn.ReLU(),
-            # torch.nn.MaxPool2d(kernel_size=2,stride=2),
-            torch.nn.Dropout(p=1 - keep_prob))
-        
-        # L4 ImgIn shape=(?, 28, 28, 64)
-        #    Conv      ->(?, 28, 28, 16)
-        #    Pool      ->(?, 14, 14, 16)
-        self.layer4 = torch.nn.Sequential(
-            torch.nn.Conv2d(64, 128, kernel_size=(1,2), stride=1),
-            torch.nn.ReLU(),
-            torch.nn.MaxPool2d(kernel_size=2, stride=2),
-            torch.nn.Dropout(p=1 - keep_prob))
-
-        # L4 FC 14x14x16 inputs -> 512 outputs
-        self.fc1 = torch.nn.Linear(768, 384, bias=True)
-        torch.nn.init.xavier_uniform(self.fc1.weight)
-#         self.layer4 = torch.nn.Sequential(
-#             self.fc1,
-#             torch.nn.ReLU(),
-#             torch.nn.Dropout(p=1 - keep_prob))
-        # L5 Final FC 1024 inputs -> 512 outputs
-        self.pool =  torch.nn.AdaptiveMaxPool2d((1,1))
-        # Affine Layer
-        self.fc2 = torch.nn.Linear(384, 50, bias=True)
-        self.Diag_Affine = Crude_Diag(50)
-        # self.test_linear = torch.nn.Linear(512,512)
-        self.fc3 = torch.nn.Linear(50, 4, bias=True)
-        torch.nn.init.xavier_uniform_(self.fc2.weight) # initialize parameters
-        # L6 Final FC 512 inputs -> 4 outputs
-#         self.fc3 = torch.nn.Linear(512, 4, bias=True)
-#         torch.nn.init.xavier_uniform_(self.fc3.weight) # initialize parameters
-
-        self.dropout = nn.Dropout(p=0.3)
-
-    def forward(self, x):
-        x= x.reshape(x.shape[0],1,x.shape[1],x.shape[2])
-        out = self.layer1(x)
-        out = self.layer2(out)
-        out = self.layer3(out)
-        out = self.layer4(out)
-#         print(out.size())
-        # out = out.view(out.size(0), -1)
-        # out = out.mean(axis = -1)
-        out = torch.mean(out, axis=-1).reshape(out.shape[0],128*6)
-#         print(out.size())# Flatten them for FC
-        out = self.fc1(out)
-        out = self.dropout(out)
-        out = self.fc2(out)
-        out = self.Diag_Affine(out)
-        # out = self.test_linear(out)
-        out = self.fc3(out)
-#         out = self.fc3(out)
-        return out
-    
-
-        
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad) 
     
@@ -345,41 +241,166 @@ def main(args):
         "batch_size": 64,
         "epochs": 100,
         "architecture": "CNN",
+        "train_ratio": 0.8,
+        "keep_prob": 0.8
     } 
 
-    trainloader, valloader = load_data(args, config['batch_size'])
+    trainloader, valloader = load_data(args, config)
     #print('Validation session is {}'.format(val_ses))
     # print('Training batches are {} and examples are {}'.format(len(trainloader), len(trainloader.dataset)))
     # print('Validation batches are {} and examples are {}'.format(len(valloader), len(valloader.dataset)))
     # sys.exit()
+    keep_prob =config["keep_prob"]
+    class Crude_Diag(nn.Module):
+        def __init__(self, in_features):
+            super(Crude_Diag, self).__init__()
+            
+            # Set a fixed seed for reproducibility
+            torch.manual_seed(0)
+            
+            # Initialize scaling factors and weight matrix
+            scaling_factors = torch.rand(in_features)
+            weight = torch.diag(scaling_factors)
+            
+            # Modify weight matrix to set non-diagonal elements to zero
+            with torch.no_grad():
+                for i in range(in_features):
+                    for j in range(in_features):
+                        if i != j:
+                            weight[i, j] = 0.0
+                            weight[i, j].requires_grad = False
+            
+            # Define linear layer with diagonal weight matrix
+            self.linear = nn.Linear(in_features, in_features, bias=False)
+            self.linear.weight = nn.Parameter(weight)
+            
+        def forward(self, x):
+            x = self.linear(x)
+            return x
+
+    class CNN(torch.nn.Module):
+
+        def __init__(self):
+            super(CNN, self).__init__()
+            # L1 ImgIn shape=(?, 224, 224, 3)
+            #    Conv     -> (?, 224, 224, 16)
+            #    Pool     -> (?, 112, 112, 16)
+            self.layer1 = torch.nn.Sequential(
+                torch.nn.Conv2d(1, 16, kernel_size=(1,3), stride=(1,2)),
+                torch.nn.ReLU(),
+                # torch.nn.MaxPool2d(kernel_size=2,stride=2),
+                torch.nn.Dropout(p=1 - keep_prob))
+            # L2 ImgIn shape=(?, 112, 112, 16)
+            #    Conv      ->(?, 112, 112, 32)
+            #    Pool      ->(?, 56, 56, 32)
+            self.layer2 = torch.nn.Sequential(
+                torch.nn.Conv2d(16, 32, kernel_size=(1,3), stride=(1,2)),
+                torch.nn.ReLU(),
+                # torch.nn.MaxPool2d(kernel_size=2,stride=2),
+                torch.nn.Dropout(p=1 - keep_prob))
+            # L3 ImgIn shape=(?, 56, 56, 32)
+            #    Conv      ->(?, 56, 56, 64)
+            #    Pool      ->(?, 28, 28, 64)
+            self.layer3 = torch.nn.Sequential(
+                torch.nn.Conv2d(32, 64, kernel_size=(1,3), stride=(1,2)),
+                torch.nn.ReLU(),
+                # torch.nn.MaxPool2d(kernel_size=2,stride=2),
+                torch.nn.Dropout(p=1 - keep_prob))
+            
+            # L4 ImgIn shape=(?, 28, 28, 64)
+            #    Conv      ->(?, 28, 28, 16)
+            #    Pool      ->(?, 14, 14, 16)
+            self.layer4 = torch.nn.Sequential(
+                torch.nn.Conv2d(64, 128, kernel_size=(1,2), stride=1),
+                torch.nn.ReLU(),
+                torch.nn.MaxPool2d(kernel_size=2, stride=2),
+                torch.nn.Dropout(p=1 - keep_prob))
+
+            # L4 FC 14x14x16 inputs -> 512 outputs
+            self.fc1 = torch.nn.Linear(768, 384, bias=True)
+            torch.nn.init.xavier_uniform(self.fc1.weight)
+    #         self.layer4 = torch.nn.Sequential(
+    #             self.fc1,
+    #             torch.nn.ReLU(),
+    #             torch.nn.Dropout(p=1 - keep_prob))
+            # L5 Final FC 1024 inputs -> 512 outputs
+            self.pool =  torch.nn.AdaptiveMaxPool2d((1,1))
+            # Affine Layer
+            self.fc2 = torch.nn.Linear(384, 50, bias=True)
+            # self.Diag_Affine = Crude_Diag(50)
+            # self.test_linear = torch.nn.Linear(512,512)
+            self.fc3 = torch.nn.Linear(50, 4, bias=True)
+            # torch.nn.init.xavier_uniform_(self.fc2.weight) # initialize parameters
+            # L6 Final FC 512 inputs -> 4 outputs
+    #         self.fc3 = torch.nn.Linear(512, 4, bias=True)
+    #         torch.nn.init.xavier_uniform_(self.fc3.weight) # initialize parameters
+
+            self.dropout = nn.Dropout(p=0.3)
+
+        def forward(self, x):
+            x= x.reshape(x.shape[0],1,x.shape[1],x.shape[2])
+            out = self.layer1(x)
+            out = self.layer2(out)
+            out = self.layer3(out)
+            out = self.layer4(out)
+    #         print(out.size())
+            # out = out.view(out.size(0), -1)
+            # out = out.mean(axis = -1)
+            out = torch.mean(out, axis=-1).reshape(out.shape[0],128*6)
+    #         print(out.size())# Flatten them for FC
+            out = self.fc1(out)
+            out = self.dropout(out)
+            out = self.fc2(out)
+            # out = self.Diag_Affine(out)
+            # out = self.test_linear(out)
+            out = self.fc3(out)
+    #         out = self.fc3(out)
+            return out
+        
+
+            
 
     model = CNN()
     model.to(device)
+        #model.load_state_dict(torch.load('/home/achharia/best_model_session_chhhharia.pt'))
+
+    #layer1_weights = torch.load('layer1_weights.pt')
+    #layer2_weights = torch.load('layer2_weights.pt')
+    #layer3_weights = torch.load('layer3_weights.pt')
+    #layer4_weights = torch.load('layer4_weights.pt')
+    #fc1_layer = torch.load('fc1_weights.pt')
+    #fc2_layer = torch.load('fc2_weights.pt')
+    #fc3_layer = torch.load('fc3_weights.pt')
+
+    #model.layer1.load_state_dict(layer1_weights)
+    #model.layer2.load_state_dict(layer2_weights)
+    #model.layer3.load_state_dict(layer3_weights)
+    #model.layer4.load_state_dict(layer4_weights)
+    #model.fc1.load_state_dict(fc1_layer)
+    #model.fc2.load_state_dict(fc2_layer)
+    #model.fc3.load_state_dict(fc3_layer)
+
+    print("network parameters", count_parameters(model))
 
 
-    # print("network before turning off sparse layer", count_parameters(model))
-    # *************************************************
-    # Run with IEMOCAP
-    for param in model.Diag_Affine.parameters():
-        param.requires_grad = False     
-    
-    ##***********************************************
-    # Run with NSC
-    
+    # for param in model.Diag_Affine.parameters():
+    #     param.requires_grad = False     
+    # # print("network after turning off sparse layer", count_parameters(model))
+
+
     # for name, param in model.named_parameters():
-    #     if 'Diag_Affine' in name:
-    #         for i in range(param.shape[0]):
-    #             for j in range(param.shape[1]):
-    #                 param[i][j].requires_grad = True
+    #     #if name.startswith("diag_affine"):
+    #     if name.startswith("Full_Affine"):
+    #         continue
     #     else:
     #         param.requires_grad = False
-    
-    ##***************************************************
-    # for param in model.
-    # print("network after turning off sparse layer", count_parameters(model))
 
+    # for name, param in model.named_parameters():
+    #     if name != 'Diag_Affine':
+    #         param.requires_grad = False
 
     #print(trainloader.dataset.class_to_idx)
+
     anger = 0
     happiness = 0
     neutral = 0
@@ -411,14 +432,17 @@ def main(args):
     class_weights = torch.FloatTensor(sample_weights).cuda()
 
     criterion = nn.CrossEntropyLoss(weight=class_weights)
-    optimizer = torch.optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
+    # optimizer = torch.optim.SGD(model.parameters(), lr=config["learning_rate"], momentum=0.9)
+    optimizer = torch.optim.AdamW(model.parameters(), lr= config["learning_rate"]) 
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer,mode ="min",min_lr=0.000001, factor=0.5,patience=2)
+    
 
     # wandb.login(key="a94b61c6268e685bc180a0634fae8dc030cd8ed4") #API Key is in your wandb account, under settings (wandb.ai/settings)
 
     # Create your wandb run
     wandb.login(key="207bf381f197203155b01dd8b56293d02aca5365") 
     run = wandb.init(
-    name    = "Iemocap-baseline-cnn", 
+    name    = "Iemocap-baseline-cnn-old-scheduler and adam", 
     reinit  = True, 
     project = "Domain Adaption",  
     config  = config ### Wandb Config for your run
@@ -434,13 +458,13 @@ def main(args):
         # pdb.set_trace()
         train_loss, train_acc = train(epoch, model, trainloader, criterion, optimizer)
         test_loss, test_acc = test(model, valloader, criterion)
-        wandb.log({"train_loss": train_loss, "train_acc": train_acc, "test_loss": test_loss, "test_acc": test_acc})
+        wandb.log({"train_loss": train_loss, "train_acc": train_acc, "test_loss": test_loss, "test_acc": test_acc,"learning_rate":float(optimizer.param_groups[0]['lr'])})
         if test_acc > best_val_acc:
             best_val_acc = test_acc
             torch.save(model.state_dict(), 'best_model_session.pt')
 
 
-
+        scheduler.step(test_loss)
         # plateau_scheduler.step(test_loss)
         history.append([train_loss, train_acc, test_loss, test_acc])
 
@@ -453,6 +477,7 @@ def main(args):
     
 
 if __name__ == "__main__":
+    # torch.manual_seed(0)
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_dir', type=str, default='/home/arpitsah/Desktop/Projects Fall-22/DA/domain_adaptation/LSTM-DENSE/speech-emotion-recognition-iemocap/preprocess_info', help='path to dataset')
     args = parser.parse_args()
