@@ -86,8 +86,8 @@ def load_data(args, config):
     # dataset = pickle.load(open('speech-emotion-recognition-iemocap/preprocess_info/feature_vectors.pkl','rb'))
     
     # dataset = pickle.load(open('NSC_part5_labelled_emotion/Preprocessed_filesNSC_datasetset_balaanced.pkl','rb'))
-    features=np.load('/home/mmpug/Desktop/to be deleted/domain_adaptation/LSTM-DENSE/features.npz')
-    label=np.load('/home/mmpug/Desktop/to be deleted/domain_adaptation/LSTM-DENSE/labels.npz')
+    features=np.load('/home/achharia/Domain_Adaptation/features.npz')
+    label=np.load('/home/achharia/Domain_Adaptation/labels.npz')
     dataset=dict()
     dataset['label'] = label
     lab=[]
@@ -257,7 +257,7 @@ def main(args):
     
     config = {
         "learning_rate": 0.0001,
-        "batch_size": 64,
+        "batch_size": 16,
         "epochs": 100,
         "architecture": "CNN",
         "train_ratio": 0.8,
@@ -336,7 +336,7 @@ def main(args):
                 torch.nn.Dropout(p=1 - keep_prob))
 
             # L4 FC 14x14x16 inputs -> 512 outputs
-            self.fc1 = torch.nn.Linear(768, 384, bias=True)
+            self.fc1 = torch.nn.Linear(65536, 384, bias=True)  #768, 384
             torch.nn.init.xavier_uniform(self.fc1.weight)
     #         self.layer4 = torch.nn.Sequential(
     #             self.fc1,
@@ -365,7 +365,7 @@ def main(args):
     #         print(out.size())
             # out = out.view(out.size(0), -1)
             # out = out.mean(axis = -1)
-            out = torch.mean(out, axis=-1).reshape(out.shape[0],128*6)
+            out = torch.mean(out, axis=-1).reshape(out.shape[0],65536)   #128*6
     #         print(out.size())# Flatten them for FC
             out = self.fc1(out)
             out = self.dropout(out)
@@ -462,9 +462,9 @@ def main(args):
     # wandb.login(key="a94b61c6268e685bc180a0634fae8dc030cd8ed4") #API Key is in your wandb account, under settings (wandb.ai/settings)
 
     # Create your wandb run
-    wandb.login(key="207bf381f197203155b01dd8b56293d02aca5365") 
+    wandb.login(key="10f6258ff28e477a5aefba52e7da866ddbfc0854") 
     run = wandb.init(
-    name    = "Iemocap-baseline-cnn-old-scheduler and adam", 
+    name    = "IEMOCAP-HUBERT-MODEL-CNN", 
     reinit  = True, 
     project = "Domain Adaption",  
     config  = config ### Wandb Config for your run
@@ -505,7 +505,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     main(args)
-    
-
-
-
+   
