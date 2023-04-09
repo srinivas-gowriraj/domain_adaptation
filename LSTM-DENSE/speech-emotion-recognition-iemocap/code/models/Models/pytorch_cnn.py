@@ -47,35 +47,38 @@ class CustomDataset(Dataset):
         
         self.mfccs = dataset['mfccs']
         self.labels = dataset['label']
-        self.filename = dataset['wav_file']    
+        #self.filename = dataset['wav_file']    
 
     def __len__(self):
         return len(self.mfccs)
 
     def __getitem__(self, idx):
-        return torch.tensor(self.mfccs[idx]), torch.tensor(self.labels[idx]), self.filename[idx]
+        return torch.tensor(self.mfccs[idx]), torch.tensor(self.labels[idx]) #, self.filename[idx]
     
 def collate_fn(batch):
-    # Determine the maximum length of the spectrograms in the batch
-    max_len = max(mfcc.shape[1] for mfcc, label, filename in batch)
+    # Determine the maximum length of the spectrograms in the batch 
+    max_len = max(mfcc.shape[1] for mfcc, label in batch)
+    #max_len = max(mfcc.shape[1] for mfcc, label, filename in batch)
 
     # Pad the spectrograms with zeros to the maximum length
     padded_mfcc = []
-    for mfcc, label, filename in batch:
+    for mfcc, label in batch:
+#    for mfcc, label, filename in batch:
         num_cols = mfcc.shape[1]
-        padding = torch.zeros((13, max_len - num_cols))
+        padding = torch.zeros((1024, max_len - num_cols))
         padded_mfcc.append(torch.cat([mfcc, padding], dim=1))
 
      # Concatenate the padded spectrograms into a tensor
     mfcc_tensor = torch.stack(padded_mfcc, dim=0)
 
      # Convert the labels to PyTorch tensor
-    labels_tensor = torch.tensor([label for mfcc, label, filename in batch])
+    labels_tensor = torch.tensor([label for mfcc, label in batch])
+    #labels_tensor = torch.tensor([label for mfcc, label, filename in batch])
 
      # Create a list of filenames
-    filenames_list = [filename for spec, label, filename in batch]
+#    filenames_list = [filename for spec, label, filename in batch]
 
-    return mfcc_tensor, labels_tensor, filenames_list
+    return mfcc_tensor, labels_tensor #, filenames_list
 
 
 
@@ -83,13 +86,25 @@ def load_data(args, config):
     # dataset = pickle.load(open('speech-emotion-recognition-iemocap/preprocess_info/feature_vectors.pkl','rb'))
     
     # dataset = pickle.load(open('NSC_part5_labelled_emotion/Preprocessed_filesNSC_datasetset_balaanced.pkl','rb'))
-    
+    features=np.load('/home/mmpug/Desktop/to be deleted/domain_adaptation/LSTM-DENSE/features.npz')
+    label=np.load('/home/mmpug/Desktop/to be deleted/domain_adaptation/LSTM-DENSE/labels.npz')
+    dataset=dict()
+    dataset['label'] = label
+    lab=[]
+    hubfea=[]
+    for i in range(len(features)):
+        idx='arr_'+str(i)
+        hubfea.append(np.swapaxes(np.squeeze(features[idx]),0,1))
+        #print(np.squeeze(features[idx]).shape)
+        lab.append(int(label[idx]))
+
+    dataset['mfccs'] = hubfea
     spectograms = []
     labels = []
     filenames = []
     mfccs = []
-    print("Loading Dataset . . .")
-    for i in range(len(dataset['label'])):
+    #print("Loading Dataset . . .")
+    '''for i in range(len(dataset['label'])):
         if dataset['label'][i] in [0,1,3,7]:
             label = 0
             if dataset['label'][i]==3:
@@ -98,15 +113,15 @@ def load_data(args, config):
                 label =3
             elif dataset['label'][i]==1:
                 label=1
-            spectograms.append(dataset['spec_db'][i])
+            #spectograms.append(dataset['spec_db'][i])
             labels.append(label)
-            filenames.append(dataset['wav_file'][i])
-            mfccs.append(dataset['mfccs'][i])
+            #filenames.append(dataset['wav_file'][i])
+            mfccs.append(dataset['mfccs'][i])'''
             
-    dataset['label'] = labels
-    dataset['spec_db'] = spectograms
-    dataset['mfccs'] = mfccs
-    dataset['wav_file'] = filenames
+    dataset['label'] = lab
+    #dataset['spec_db'] = spectograms
+    #dataset['mfccs'] = mfccs
+    #dataset['wav_file'] = filenames
 
     emotion_full_dict = {0:'angry', 1:'happiness', 2:'sad', 3:'neutral'}
     
@@ -138,7 +153,9 @@ def load_data(args, config):
     testloader = torch.utils.data.DataLoader(test_dataset, batch_size=config['batch_size'], shuffle=True, collate_fn=collate_fn)
     
     
-    for i, (inputs, labels, filenames) in enumerate(trainloader):
+    for i, (inputs, labels) in enumerate(trainloader):
+    
+    #for i, (inputs, labels, filenames) in enumerate(trainloader):
         # print(inputs.shape)
         # print(labels)
         # print('dataloader is working')
@@ -155,7 +172,8 @@ def train(epoch, model, trainloader, criterion, optimizer ):
     train_loss = 0
     train_acc = 0
     
-    for batch_idx, (data, target,filename) in enumerate(trainloader):
+    for batch_idx, (data, target) in enumerate(trainloader):
+    #for batch_idx, (data, target,filename) in enumerate(trainloader):
         data, target = data.to(device), target.to(device)
         # print(data.shape)
         
@@ -191,7 +209,8 @@ def test(model, valloader, criterion):
     pred_model = []
     actual = []
 
-    for data, target,filename in valloader:
+    for data, target in valloader:
+#    for data, target,filename in valloader:
         data, target = data.to(device), target.to(device)
 
         # output from model
@@ -408,7 +427,9 @@ def main(args):
     max_length  = float('-inf')
     min_length  = float('inf')
     avg_length =0
-    for i, (inputs, labels,filename) in enumerate(trainloader):
+
+    for i, (inputs, labels) in enumerate(trainloader):
+#    for i, (inputs, labels,filename) in enumerate(trainloader):
         labels = list(labels.numpy())
         anger += labels.count(0)
         happiness += labels.count(1)
@@ -419,7 +440,8 @@ def main(args):
         if inputs.shape[-1]<min_length: 
             min_length = inputs.shape[-1]
         avg_length +=inputs.shape[-1]
-    for i, (inputs, labels,filename) in enumerate(valloader):
+    for i, (inputs, labels) in enumerate(valloader):
+#    for i, (inputs, labels,filename) in enumerate(valloader):
         labels = list(labels.numpy())
         anger += labels.count(0)
         happiness += labels.count(1)
