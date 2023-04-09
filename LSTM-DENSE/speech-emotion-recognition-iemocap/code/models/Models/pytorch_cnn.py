@@ -86,8 +86,8 @@ def load_data(args, config):
     # dataset = pickle.load(open('speech-emotion-recognition-iemocap/preprocess_info/feature_vectors.pkl','rb'))
     
     # dataset = pickle.load(open('NSC_part5_labelled_emotion/Preprocessed_filesNSC_datasetset_balaanced.pkl','rb'))
-    features=np.load('/home/mmpug/Desktop/to be deleted/domain_adaptation/LSTM-DENSE/features.npz')
-    label=np.load('/home/mmpug/Desktop/to be deleted/domain_adaptation/LSTM-DENSE/labels.npz')
+    features=np.load('/home/achharia/Domain_Adaptation/features.npz')
+    label=np.load('/home/achharia/Domain_Adaptation/labels.npz')
     dataset=dict()
     dataset['label'] = label
     lab=[]
@@ -323,7 +323,7 @@ def main(args):
             self.layer3 = torch.nn.Sequential(
                 torch.nn.Conv2d(32, 64, kernel_size=(3,3), stride=2),
                 torch.nn.ReLU(),
-                torch.nn.MaxPool2d(kernel_size=2,stride=2),
+                #torch.nn.MaxPool2d(kernel_size=2,stride=2),
                 torch.nn.Dropout(p=1 - keep_prob))
             
             # L4 ImgIn shape=(?, 28, 28, 64)
@@ -336,7 +336,7 @@ def main(args):
                 torch.nn.Dropout(p=1 - keep_prob))
 
             # L4 FC 14x14x16 inputs -> 512 outputs
-            self.fc1 = torch.nn.Linear(896, 384, bias=True)  #768, 384
+            self.fc1 = torch.nn.Linear(1920, 384, bias=True)  #768, 384
             torch.nn.init.xavier_uniform(self.fc1.weight)
     #         self.layer4 = torch.nn.Sequential(
     #             self.fc1,
@@ -380,8 +380,6 @@ def main(args):
     #         out = self.fc3(out)
             return out
         
-
-            
 
     model = CNN()
     model.to(device)
@@ -455,7 +453,7 @@ def main(args):
     # avg_length/=len(trainloader)
     print('Anger: {}, Happiness: {}, Neutral: {}, Sadness: {}'.format(anger, happiness, neutral, sadnes))
     sample_weights = [1/anger, 1/happiness, 1/neutral, 1/sadnes]
-    class_weights = torch.FloatTensor(sample_weights) #.cuda()
+    class_weights = torch.FloatTensor(sample_weights).cuda()
 
     criterion = nn.CrossEntropyLoss(weight=class_weights)
     # optimizer = torch.optim.SGD(model.parameters(), lr=config["learning_rate"], momentum=0.9)
