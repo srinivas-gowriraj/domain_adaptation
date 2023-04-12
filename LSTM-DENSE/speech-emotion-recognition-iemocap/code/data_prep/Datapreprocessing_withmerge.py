@@ -10,6 +10,7 @@ import matplotlib.style as ms
 from tqdm import tqdm
 import pickle
 import random
+from collections import Counter
 
 import IPython.display
 import librosa.display
@@ -61,7 +62,8 @@ def read_labels(args):
 
 def extract_features(args):
 
-    labels_df = pd.read_csv(args.output_dir + 'df_iemocap.csv')
+    # labels_df = pd.read_csv(args.output_dir + 'df_iemocap.csv')
+    labels_df = os.listdir(args.data_dir)
     sr = 22050
 
 
@@ -116,8 +118,8 @@ def extract_features(args):
             label = emotion_dict[row['emotion']]
             y = audio_vectors[wav_file_name]
 
-            #features_all = list(features(y, sr))
-            # Extract the Mel-frequency cepstral coefficients (MFCC) features
+            #features_all = list(dataset(y, sr))
+            # Extract the Mel-frequency cepstral coefficients (MFCC) dataset
             mfccs = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13)
 
             # Extract the spectrogram
@@ -183,25 +185,35 @@ def domain_adapted_data_Preprocess(args, label):
     lab=[]
     specs=[]
     for i in orig_wav_files:
-        print(i)
+        
         wavpath = os.path.join(args.data_dir, i)
         orig_wav_vector, _sr = librosa.load(wavpath, sr=22050)
         orig_wav_file, file_format = wavpath.split('.')
+        print(orig_wav_file)
         
         #audio_vectors[orig_wav_file] = orig_wav_vector
         mfccs = librosa.feature.mfcc(y = orig_wav_vector, sr=22050, n_mfcc=13)
         spec = librosa.feature.melspectrogram(y = orig_wav_vector, sr=22050, n_mels=128)
         spec_db = librosa.power_to_db(spec, ref=np.max)
         filename.append(wavpath)
-        mfcc.append(np.array(orig_wav_file))
+        mfcc.append(np.array(mfccs))
         audiovec.append(orig_wav_vector)
-        lab.append(label)
+        #lab.append(label)
+        if "F" in orig_wav_file:
+            lab.append(1)
+        if "W" in orig_wav_file:
+            lab.append(0)
+        if "T" in orig_wav_file:
+            lab.append(3)
+        if "N" in orig_wav_file:
+            lab.append(7)
+            print("something working")
+        
         specs.append(np.array(spec_db))
 
     final_dictionary = {'wav_file': filename, 'label': lab, 'mfccs': mfcc, 'spec_db': specs}
-    with open(args.output_dir + 'feature_vectors_Neutral.pkl', 'wb') as f:
+    with open(args.output_dir + 'feature_vectors_emodb.pkl', 'wb') as f:
         pickle.dump(final_dictionary, f)
-
 
 def combine(args):
     data_angry= pd.read_pickle(args.output_dir + 'feature_vectors_Angry.pkl')
@@ -277,17 +289,29 @@ def combine(args):
         pickle.dump(final_dictionary, f)
 
 
+def test_pickle(path):
+    #dataset=np.load(path)
+    dataset = pickle.load(open(path,'rb'))
+    a=dataset['label']
+    print(dataset['mfccs'][0])
+    print(Counter(a))
+    
+    
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--data_dir', type=str, default='/home/achharia/Domain-adaptation/domain_adaptation/NSC_part5_labelled_emotion/Neutral/')
-    parser.add_argument('--output_dir', type=str, default='/home/achharia/Domain-adaptation/domain_adaptation/NSC_part5_labelled_emotion/Preprocessed_files/')
+    import sys
+    parser.add_argument('--output_dir', type=str, default='LSTM-DENSE/speech-emotion-recognition-iemocap/preprocess_info')
+    sys.path.append("wav")
+    parser.add_argument('--data_dir', type=str, default='wav')
     args = parser.parse_args()
     #read_labels(args)
     #extract_features(args)
     #read_df_features(args)
     #createImageData(args)
     #domain_adapted_data_Preprocess(args, label=7)
-    combine(args)
+    # combine(args)
+    
+    test_pickle("LSTM-DENSE/speech-emotion-recognition-iemocap/preprocess_infofeature_vectors_emodb.pkl")
     
 
 

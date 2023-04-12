@@ -53,6 +53,7 @@ class CustomDataset(Dataset):
         return len(self.mfccs)
 
     def __getitem__(self, idx):
+        #print(type(self.labels[idx]))
         return torch.tensor(self.mfccs[idx]), torch.tensor(self.labels[idx]) #, self.filename[idx]
     
 def collate_fn(batch):
@@ -65,7 +66,7 @@ def collate_fn(batch):
     for mfcc, label in batch:
 #    for mfcc, label, filename in batch:
         num_cols = mfcc.shape[1]
-        padding = torch.zeros((1024, max_len - num_cols))
+        padding = torch.zeros((13, max_len - num_cols))
         padded_mfcc.append(torch.cat([mfcc, padding], dim=1))
 
      # Concatenate the padded spectrograms into a tensor
@@ -83,28 +84,30 @@ def collate_fn(batch):
 
 
 def load_data(args, config):
-    # dataset = pickle.load(open('speech-emotion-recognition-iemocap/preprocess_info/feature_vectors.pkl','rb'))
+    dataset = pickle.load(open('/home/arpitsah/Desktop/Projects Fall-22/DA/domain_adaptation/feature_vectors.pkl','rb'))
     
-    # dataset = pickle.load(open('NSC_part5_labelled_emotion/Preprocessed_filesNSC_datasetset_balaanced.pkl','rb'))
-    features=np.load('/home/achharia/Domain_Adaptation/features.npz')
-    label=np.load('/home/achharia/Domain_Adaptation/labels.npz')
-    dataset=dict()
-    dataset['label'] = label
-    lab=[]
-    hubfea=[]
-    for i in range(len(features)):
-        idx='arr_'+str(i)
-        hubfea.append(np.swapaxes(np.squeeze(features[idx]),0,1))
-        #print(np.squeeze(features[idx]).shape)
-        lab.append(int(label[idx]))
-
-    dataset['mfccs'] = hubfea
+    datasete = pickle.load(open('LSTM-DENSE/speech-emotion-recognition-iemocap/preprocess_infofeature_vectors_emodb.pkl','rb'))
+    
+    
+    # features=np.load('/home/achharia/Domain_Adaptation/features.npz')
+    # label=np.load('/home/achharia/Domain_Adaptation/labels.npz')
+    # dataset=dict()
+    # dataset['label'] = label
+    # lab=[]
+    # hubfea=[]
+    # for i in range(len(features)):
+    #     idx='arr_'+str(i)
+    #     hubfea.append(np.swapaxes(np.squeeze(features[idx]),0,1))
+    #     #print(np.squeeze(features[idx]).shape)
+    #     lab.append(int(label[idx]))
+    # dataset['mfccs'] = hubfea
+    
     spectograms = []
     labels = []
     filenames = []
     mfccs = []
-    #print("Loading Dataset . . .")
-    '''for i in range(len(dataset['label'])):
+    print("Loading Dataset . . .")
+    for i in range(len(dataset['label'])):
         if dataset['label'][i] in [0,1,3,7]:
             label = 0
             if dataset['label'][i]==3:
@@ -113,15 +116,41 @@ def load_data(args, config):
                 label =3
             elif dataset['label'][i]==1:
                 label=1
-            #spectograms.append(dataset['spec_db'][i])
+            spectograms.append(dataset['spec_db'][i])
             labels.append(label)
-            #filenames.append(dataset['wav_file'][i])
-            mfccs.append(dataset['mfccs'][i])'''
+            filenames.append(dataset['wav_file'][i])
+            mfccs.append(dataset['mfccs'][i])
+    
             
-    dataset['label'] = lab
-    #dataset['spec_db'] = spectograms
-    #dataset['mfccs'] = mfccs
-    #dataset['wav_file'] = filenames
+    dataset['label'] = labels
+    dataset['spec_db'] = spectograms
+    dataset['mfccs'] = mfccs
+    dataset['wav_file'] = filenames
+    
+    spectogramse = []
+    labelse = []
+    filenamese = []
+    mfccse = []
+    print("Loading Dataset . . .")
+    for i in range(len(datasete['label'])):
+        if datasete['label'][i] in [0,1,3,7]:
+            label = 0
+            if datasete['label'][i]==3:
+                label = 2
+            elif datasete['label'][i]==7:
+                label =3
+            elif datasete['label'][i]==1:
+                label=1
+            spectogramse.append(datasete['spec_db'][i])
+            labelse.append(label)
+            filenamese.append(datasete['wav_file'][i])
+            mfccse.append(datasete['mfccs'][i])
+    
+            
+    datasete['label'] = labelse
+    datasete['spec_db'] = spectogramse
+    datasete['mfccs'] = mfccse
+    datasete['wav_file'] = filenamese
 
     emotion_full_dict = {0:'angry', 1:'happiness', 2:'sad', 3:'neutral'}
     
@@ -133,12 +162,21 @@ def load_data(args, config):
     # Calculate the number of data points in the train and test sets
     num_train = int(len(dataset['label']) * train_ratio)
     num_test = len(dataset['label']) - num_train
+    
+    num_traine = int(len(datasete['label']) * train_ratio)
+    num_teste = len(datasete['label']) - num_train
 
     # Create a list of indices for the train and test sets
     indices = list(range(len(dataset['label'])))
+    
+    indicese = list(range(len(datasete['label'])))
     random.shuffle(indices)
+    random.shuffle(indicese)
     train_indices = indices[:num_train]
     test_indices = indices[num_train:]
+    
+    train_indicese = indicese[:num_traine]
+    test_indicese = indicese[num_traine:]
 
     # Split the data into train and test sets
     train_dataset = {}
@@ -146,7 +184,14 @@ def load_data(args, config):
     for key in dataset:
         train_dataset[key] = [dataset[key][i] for i in train_indices]
         test_dataset[key] = [dataset[key][i] for i in test_indices]
-
+        for i in train_indicese:
+            train_dataset[key].append(datasete[key][i])
+            #print(datasete[key][i])
+        for i in train_indicese:
+            test_dataset[key].append(datasete[key][i])
+            # if key=="label":
+                #print(datasete[key][i])
+            #print(datasete[key][i])
     train_dataset = CustomDataset(train_dataset)
     test_dataset = CustomDataset(test_dataset)
     trainloader = torch.utils.data.DataLoader(train_dataset, batch_size=config['batch_size'], shuffle=True, collate_fn=collate_fn)
@@ -252,7 +297,15 @@ def test(model, valloader, criterion):
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad) 
     
-
+    
+# config = {
+# 		"learning_rate": 0.0001,
+# 		"batch_size": 16,
+# 		"epochs": 100,
+# 		"architecture": "CNN",
+# 		"train_ratio": 0.8,
+# 		"keep_prob": 0.8
+# 	} 
 def main(args):
     
     config = {
@@ -298,45 +351,42 @@ def main(args):
             return x
 
     class CNN(torch.nn.Module):
-
-        def __init__(self):
+        def __init__(self,config=config):
             super(CNN, self).__init__()
             # L1 ImgIn shape=(?, 224, 224, 3)
             #    Conv     -> (?, 224, 224, 16)
             #    Pool     -> (?, 112, 112, 16)
             self.layer1 = torch.nn.Sequential(
-                torch.nn.Conv2d(1, 16, kernel_size=(3,3), stride=2),
+                torch.nn.Conv2d(1, 16, kernel_size=(1,3), stride=(1,2)),
                 torch.nn.ReLU(),
-                torch.nn.MaxPool2d(kernel_size=2,stride=2),
-                torch.nn.Dropout(p=1 - keep_prob))
+                # torch.nn.MaxPool2d(kernel_size=2,stride=2),
+                torch.nn.Dropout(p=1 - config['keep_prob']))
             # L2 ImgIn shape=(?, 112, 112, 16)
             #    Conv      ->(?, 112, 112, 32)
             #    Pool      ->(?, 56, 56, 32)
             self.layer2 = torch.nn.Sequential(
-                torch.nn.Conv2d(16, 32, kernel_size=(3,3), stride=2),
+                torch.nn.Conv2d(16, 32, kernel_size=(1,3), stride=(1,2)),
                 torch.nn.ReLU(),
-                torch.nn.MaxPool2d(kernel_size=2,stride=2),
-                torch.nn.Dropout(p=1 - keep_prob))
+                # torch.nn.MaxPool2d(kernel_size=2,stride=2),
+                torch.nn.Dropout(p=1 - config['keep_prob']))
             # L3 ImgIn shape=(?, 56, 56, 32)
             #    Conv      ->(?, 56, 56, 64)
             #    Pool      ->(?, 28, 28, 64)
             self.layer3 = torch.nn.Sequential(
-                torch.nn.Conv2d(32, 64, kernel_size=(3,3), stride=2),
+                torch.nn.Conv2d(32, 64, kernel_size=(1,3), stride=(1,2)),
                 torch.nn.ReLU(),
-                #torch.nn.MaxPool2d(kernel_size=2,stride=2),
-                torch.nn.Dropout(p=1 - keep_prob))
-            
+                # torch.nn.MaxPool2d(kernel_size=2,stride=2),
+                torch.nn.Dropout(p=1 - config['keep_prob']))
             # L4 ImgIn shape=(?, 28, 28, 64)
             #    Conv      ->(?, 28, 28, 16)
             #    Pool      ->(?, 14, 14, 16)
             self.layer4 = torch.nn.Sequential(
-                torch.nn.Conv2d(64, 128, kernel_size=(2,2), stride=1),
+                torch.nn.Conv2d(64, 128, kernel_size=(1,2), stride=1),
                 torch.nn.ReLU(),
                 torch.nn.MaxPool2d(kernel_size=2, stride=2),
-                torch.nn.Dropout(p=1 - keep_prob))
-
+                torch.nn.Dropout(p=1 - config['keep_prob']))
             # L4 FC 14x14x16 inputs -> 512 outputs
-            self.fc1 = torch.nn.Linear(1920, 384, bias=True)  #768, 384
+            self.fc1 = torch.nn.Linear(768, 384, bias=True)
             torch.nn.init.xavier_uniform(self.fc1.weight)
     #         self.layer4 = torch.nn.Sequential(
     #             self.fc1,
@@ -353,23 +403,17 @@ def main(args):
             # L6 Final FC 512 inputs -> 4 outputs
     #         self.fc3 = torch.nn.Linear(512, 4, bias=True)
     #         torch.nn.init.xavier_uniform_(self.fc3.weight) # initialize parameters
-
             self.dropout = nn.Dropout(p=0.3)
-
         def forward(self, x):
             x= x.reshape(x.shape[0],1,x.shape[1],x.shape[2])
             out = self.layer1(x)
             out = self.layer2(out)
             out = self.layer3(out)
             out = self.layer4(out)
-            #print(out.size())
+    #         print(out.size())
             # out = out.view(out.size(0), -1)
             # out = out.mean(axis = -1)
-            #out = torch.mean(out, axis=-1).reshape(out.shape[0],63488)   #128*6
-            out = torch.mean(out, axis=-1)
-            #print(out.size())
-            out = out.view(out.size(0), -1)
-            #print(out.size())
+            out = torch.mean(out, axis=-1).reshape(out.shape[0],128*6)
     #         print(out.size())# Flatten them for FC
             out = self.fc1(out)
             out = self.dropout(out)
@@ -380,7 +424,6 @@ def main(args):
     #         out = self.fc3(out)
             return out
         
-
     model = CNN()
     model.to(device)
         #model.load_state_dict(torch.load('/home/achharia/best_model_session_chhhharia.pt'))
