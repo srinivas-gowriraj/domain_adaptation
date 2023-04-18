@@ -241,7 +241,7 @@ def train(epoch, model, trainloader, criterion, optimizer ):
             # 
     train_loss /= len(trainloader.dataset)
     train_acc = 100. * correct_train / len(trainloader.dataset)
-    return train_loss, int(train_acc.numpy())
+    return train_loss, train_acc.numpy()
 
 
 def test(model, valloader, criterion):
@@ -286,7 +286,7 @@ def test(model, valloader, criterion):
 
     #print('\n Classification Report \n {} \n'.format(classification_report(actual_with_label, pred_with_label)))
 
-    return test_loss, int(test_acc.numpy())
+    return test_loss, test_acc.numpy()
             
 
 
