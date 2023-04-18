@@ -86,7 +86,7 @@ def collate_fn(batch):
 def load_data(args, config):
     dataset = pickle.load(open('/home/arpitsah/Desktop/Projects Fall-22/DA/domain_adaptation/feature_vectors.pkl','rb'))
     
-    datasete = pickle.load(open('LSTM-DENSE/speech-emotion-recognition-iemocap/preprocess_infofeature_vectors_emodb.pkl','rb'))
+    #datasete = pickle.load(open('LSTM-DENSE/speech-emotion-recognition-iemocap/preprocess_infofeature_vectors_emodb.pkl','rb'))
     
     
     # features=np.load('/home/achharia/Domain_Adaptation/features.npz')
@@ -122,35 +122,35 @@ def load_data(args, config):
             mfccs.append(dataset['mfccs'][i])
     
             
-    dataset['label'] = labels
-    dataset['spec_db'] = spectograms
-    dataset['mfccs'] = mfccs
-    dataset['wav_file'] = filenames
+    # dataset['label'] = labels
+    # dataset['spec_db'] = spectograms
+    # dataset['mfccs'] = mfccs
+    # dataset['wav_file'] = filenames
     
-    spectogramse = []
-    labelse = []
-    filenamese = []
-    mfccse = []
-    print("Loading Dataset . . .")
-    for i in range(len(datasete['label'])):
-        if datasete['label'][i] in [0,1,3,7]:
-            label = 0
-            if datasete['label'][i]==3:
-                label = 2
-            elif datasete['label'][i]==7:
-                label =3
-            elif datasete['label'][i]==1:
-                label=1
-            spectogramse.append(datasete['spec_db'][i])
-            labelse.append(label)
-            filenamese.append(datasete['wav_file'][i])
-            mfccse.append(datasete['mfccs'][i])
+    # spectogramse = []
+    # labelse = []
+    # filenamese = []
+    # mfccse = []
+    # print("Loading Dataset . . .")
+    # for i in range(len(datasete['label'])):
+    #     if datasete['label'][i] in [0,1,3,7]:
+    #         label = 0
+    #         if datasete['label'][i]==3:
+    #             label = 2
+    #         elif datasete['label'][i]==7:
+    #             label =3
+    #         elif datasete['label'][i]==1:
+    #             label=1
+    #         spectogramse.append(datasete['spec_db'][i])
+    #         labelse.append(label)
+    #         filenamese.append(datasete['wav_file'][i])
+    #         mfccse.append(datasete['mfccs'][i])
     
             
-    datasete['label'] = labelse
-    datasete['spec_db'] = spectogramse
-    datasete['mfccs'] = mfccse
-    datasete['wav_file'] = filenamese
+    # datasete['label'] = labelse
+    # datasete['spec_db'] = spectogramse
+    # datasete['mfccs'] = mfccse
+    # datasete['wav_file'] = filenamese
 
     emotion_full_dict = {0:'angry', 1:'happiness', 2:'sad', 3:'neutral'}
     
@@ -163,20 +163,20 @@ def load_data(args, config):
     num_train = int(len(dataset['label']) * train_ratio)
     num_test = len(dataset['label']) - num_train
     
-    num_traine = int(len(datasete['label']) * train_ratio)
-    num_teste = len(datasete['label']) - num_train
+    # num_traine = int(len(datasete['label']) * train_ratio)
+    # num_teste = len(datasete['label']) - num_train
 
     # Create a list of indices for the train and test sets
     indices = list(range(len(dataset['label'])))
     
-    indicese = list(range(len(datasete['label'])))
+    #indicese = list(range(len(datasete['label'])))
     random.shuffle(indices)
-    random.shuffle(indicese)
+    #random.shuffle(indicese)
     train_indices = indices[:num_train]
     test_indices = indices[num_train:]
     
-    train_indicese = indicese[:num_traine]
-    test_indicese = indicese[num_traine:]
+    # train_indicese = indicese[:num_traine]
+    # test_indicese = indicese[num_traine:]
 
     # Split the data into train and test sets
     train_dataset = {}
@@ -184,11 +184,11 @@ def load_data(args, config):
     for key in dataset:
         train_dataset[key] = [dataset[key][i] for i in train_indices]
         test_dataset[key] = [dataset[key][i] for i in test_indices]
-        for i in train_indicese:
-            train_dataset[key].append(datasete[key][i])
-            #print(datasete[key][i])
-        for i in train_indicese:
-            test_dataset[key].append(datasete[key][i])
+        # for i in train_indicese:
+        #     train_dataset[key].append(datasete[key][i])
+        #     #print(datasete[key][i])
+        # for i in train_indicese:
+        #     test_dataset[key].append(datasete[key][i])
             # if key=="label":
                 #print(datasete[key][i])
             #print(datasete[key][i])
@@ -396,7 +396,7 @@ def main(args):
             self.pool =  torch.nn.AdaptiveMaxPool2d((1,1))
             # Affine Layer
             self.fc2 = torch.nn.Linear(384, 50, bias=True)
-            # self.Diag_Affine = Crude_Diag(50)
+            self.Diag_Affine = Crude_Diag(50)
             # self.test_linear = torch.nn.Linear(512,512)
             self.fc3 = torch.nn.Linear(50, 4, bias=True)
             # torch.nn.init.xavier_uniform_(self.fc2.weight) # initialize parameters
@@ -418,7 +418,7 @@ def main(args):
             out = self.fc1(out)
             out = self.dropout(out)
             out = self.fc2(out)
-            # out = self.Diag_Affine(out)
+            out = self.Diag_Affine(out)
             # out = self.test_linear(out)
             out = self.fc3(out)
     #         out = self.fc3(out)
@@ -428,21 +428,21 @@ def main(args):
     model.to(device)
         #model.load_state_dict(torch.load('/home/achharia/best_model_session_chhhharia.pt'))
 
-    #layer1_weights = torch.load('layer1_weights.pt')
-    #layer2_weights = torch.load('layer2_weights.pt')
-    #layer3_weights = torch.load('layer3_weights.pt')
-    #layer4_weights = torch.load('layer4_weights.pt')
-    #fc1_layer = torch.load('fc1_weights.pt')
-    #fc2_layer = torch.load('fc2_weights.pt')
-    #fc3_layer = torch.load('fc3_weights.pt')
+    layer1_weights = torch.load('layer1_weights.pt')
+    layer2_weights = torch.load('layer2_weights.pt')
+    layer3_weights = torch.load('layer3_weights.pt')
+    layer4_weights = torch.load('layer4_weights.pt')
+    fc1_layer = torch.load('fc1_weights.pt')
+    fc2_layer = torch.load('fc2_weights.pt')
+    fc3_layer = torch.load('fc3_weights.pt')
 
-    #model.layer1.load_state_dict(layer1_weights)
-    #model.layer2.load_state_dict(layer2_weights)
-    #model.layer3.load_state_dict(layer3_weights)
-    #model.layer4.load_state_dict(layer4_weights)
-    #model.fc1.load_state_dict(fc1_layer)
-    #model.fc2.load_state_dict(fc2_layer)
-    #model.fc3.load_state_dict(fc3_layer)
+    model.layer1.load_state_dict(layer1_weights)
+    model.layer2.load_state_dict(layer2_weights)
+    model.layer3.load_state_dict(layer3_weights)
+    model.layer4.load_state_dict(layer4_weights)
+    model.fc1.load_state_dict(fc1_layer)
+    model.fc2.load_state_dict(fc2_layer)
+    model.fc3.load_state_dict(fc3_layer)
 
     print("network parameters", count_parameters(model))
 
@@ -452,16 +452,16 @@ def main(args):
     # # print("network after turning off sparse layer", count_parameters(model))
 
 
-    # for name, param in model.named_parameters():
-    #     #if name.startswith("diag_affine"):
-    #     if name.startswith("Full_Affine"):
-    #         continue
-    #     else:
-    #         param.requires_grad = False
+    for name, param in model.named_parameters():
+        #if name.startswith("diag_affine"):
+        if name.startswith("Full_Affine"):
+            continue
+        else:
+            param.requires_grad = False
 
-    # for name, param in model.named_parameters():
-    #     if name != 'Diag_Affine':
-    #         param.requires_grad = False
+    for name, param in model.named_parameters():
+        if name != 'Diag_Affine':
+            param.requires_grad = False
 
     #print(trainloader.dataset.class_to_idx)
 
