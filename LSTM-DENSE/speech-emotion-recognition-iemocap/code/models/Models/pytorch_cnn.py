@@ -545,9 +545,20 @@ def main(args):
 
 if __name__ == "__main__":
     # torch.manual_seed(0)
+    
+
+
+
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_dir', type=str, default='/home/arpitsah/Desktop/Projects Fall-22/DA/domain_adaptation/LSTM-DENSE/speech-emotion-recognition-iemocap/preprocess_info', help='path to dataset')
+    parser.add_argument('--seed', type = int, default =  42,help ="seed for run")
     args = parser.parse_args()
+    if args.seed is not None:
+       torch.manual_seed(args.seed)
+       torch.cuda.manual_seed(args.seed)
+       random.seed(args.seed)
+       np.random.seed(args.seed)
+       torch.backends.cudnn.deterministic = True
     
     main(args)
    
