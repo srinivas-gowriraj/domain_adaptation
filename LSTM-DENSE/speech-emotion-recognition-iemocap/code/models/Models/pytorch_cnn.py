@@ -18,6 +18,7 @@ import seaborn as sns
 import IPython.display as ipd
 import warnings
 import os
+import sys
 warnings.filterwarnings('ignore')
 from sklearn.metrics import confusion_matrix
 import wandb
@@ -83,10 +84,56 @@ def collate_fn(batch):
 
 
 
+
 def load_data(args, config):
-    dataset = pickle.load(open('/home/arpitsah/Desktop/Projects Fall-22/DA/domain_adaptation/feature_vectors.pkl','rb'))
+    train_dataset={}
+    for dataset in args.train_datasets:
+        if dataset == "IEMOCAP":
+            d = pickle.load(open('LSTM-DENSE/speech-emotion-recognition-iemocap/preprocess_info/feature_vectors.pkl','rb'))
+            
+        elif dataset == "EMODB":
+            d = pickle.load(open('LSTM-DENSE/speech-emotion-recognition-iemocap/preprocess_info/preprocess_infofeature_vectors_emodb1.pkl','rb'))
+            
+        elif dataset == "NSC":
+
+            d = pickle.load(open('LSTM-DENSE/speech-emotion-recognition-iemocap/preprocess_info/NSC_datasetset_balaanced.pkl','rb'))
+        else:
+            print("Wrong dataset")
+            sys.exit()
+        if len(train_dataset)==0:
+            train_dataset = d
+        else:
+            for key in d.keys():
+                train_dataset[key].extend(d[key])
+                
+    test_dataset={}
+    for dataset in args.test_datasets:
+        if dataset == "IEMOCAP":
+            d = pickle.load(open('LSTM-DENSE/speech-emotion-recognition-iemocap/preprocess_info/feature_vectors.pkl','rb'))
+            
+        elif dataset == "EMODB":
+            d = pickle.load(open('LSTM-DENSE/speech-emotion-recognition-iemocap/preprocess_info/preprocess_infofeature_vectors_emodb1.pkl','rb'))
+            
+        elif dataset == "NSC":
+
+            d = pickle.load(open('LSTM-DENSE/speech-emotion-recognition-iemocap/preprocess_info/NSC_datasetset_balaanced.pkl','rb'))
+        else:
+            print("Wrong dataset")
+            sys.exit()
+        if len(test_dataset)==0:
+            test_dataset = d
+        else:
+            for key in d.keys():
+                test_dataset[key].extend(d[key])
+                
+    dataset = train_dataset
+    datasete = test_dataset
     
-    datasete = pickle.load(open('LSTM-DENSE/speech-emotion-recognition-iemocap/preprocess_infofeature_vectors_emodb.pkl','rb'))
+        
+    
+    #dataset = pickle.load(open('/home/arpitsah/Desktop/Projects Fall-22/DA/domain_adaptation/LSTM-DENSE/speech-emotion-recognition-iemocap/preprocess_info/feature_vectors.pkl','rb'))
+    
+    #datasete = pickle.load(open('LSTM-DENSE/speech-emotion-recognition-iemocap/preprocess_info/preprocess_infofeature_vectors_emodb1.pkl','rb'))
     
     
     # features=np.load('/home/achharia/Domain_Adaptation/features.npz')
@@ -183,12 +230,12 @@ def load_data(args, config):
     test_dataset = {}
     for key in dataset:
         train_dataset[key] = [dataset[key][i] for i in train_indices]
-        test_dataset[key] = [dataset[key][i] for i in test_indices]
+        '''test_dataset[key] = [dataset[key][i] for i in test_indices]
         for i in train_indicese:
             train_dataset[key].append(datasete[key][i])
-            #print(datasete[key][i])
-        for i in train_indicese:
-            test_dataset[key].append(datasete[key][i])
+            #print(datasete[key][i])'''
+        test_dataset[key] =  [datasete[key][i] for i in test_indicese]
+        
             # if key=="label":
                 #print(datasete[key][i])
             #print(datasete[key][i])
@@ -229,7 +276,7 @@ def train(epoch, model, trainloader, criterion, optimizer ):
         loss.backward()
         optimizer.step()
         
-        train_loss += loss.item()
+        train_loss += float(loss.item())
         # get the label of prediction
         pred = torch.max(output.data, 1)[1]
         correct_train += pred.eq(target.data.view_as(pred)).cpu().sum()
@@ -306,24 +353,16 @@ def count_parameters(model):
 # 		"train_ratio": 0.8,
 # 		"keep_prob": 0.8
 # 	} 
-def main(args):
-    
-    config = {
-        "learning_rate": 0.0001,
+
+config = {
+        "learning_rate": 0.00001,
         "batch_size": 16,
         "epochs": 100,
         "architecture": "CNN",
         "train_ratio": 0.8,
         "keep_prob": 0.8
     } 
-
-    trainloader, valloader = load_data(args, config)
-    #print('Validation session is {}'.format(val_ses))
-    # print('Training batches are {} and examples are {}'.format(len(trainloader), len(trainloader.dataset)))
-    # print('Validation batches are {} and examples are {}'.format(len(valloader), len(valloader.dataset)))
-    # sys.exit()
-    keep_prob =config["keep_prob"]
-    class Crude_Diag(nn.Module):
+class Crude_Diag(nn.Module):
         def __init__(self, in_features):
             super(Crude_Diag, self).__init__()
             
@@ -350,7 +389,7 @@ def main(args):
             x = self.linear(x)
             return x
 
-    class CNN(torch.nn.Module):
+class CNN(torch.nn.Module):
         def __init__(self,config=config):
             super(CNN, self).__init__()
             # L1 ImgIn shape=(?, 224, 224, 3)
@@ -423,6 +462,15 @@ def main(args):
             out = self.fc3(out)
     #         out = self.fc3(out)
             return out
+def main(args):
+    
+    trainloader, valloader = load_data(args, config)
+    #print('Validation session is {}'.format(val_ses))
+    # print('Training batches are {} and examples are {}'.format(len(trainloader), len(trainloader.dataset)))
+    # print('Validation batches are {} and examples are {}'.format(len(valloader), len(valloader.dataset)))
+    # sys.exit()
+    keep_prob =config["keep_prob"]
+
         
     model = CNN()
     model.to(device)
@@ -507,9 +555,9 @@ def main(args):
     # wandb.login(key="a94b61c6268e685bc180a0634fae8dc030cd8ed4") #API Key is in your wandb account, under settings (wandb.ai/settings)
 
     # Create your wandb run
-    wandb.login(key="10f6258ff28e477a5aefba52e7da866ddbfc0854") 
+    wandb.login(key="207bf381f197203155b01dd8b56293d02aca5365") 
     run = wandb.init(
-    name    = "IEMOCAP-HUBERT-MODEL-CNN", 
+    name    = "IEMOCAP-80-EMODB-80", 
     reinit  = True, 
     project = "Domain Adaption",  
     config  = config ### Wandb Config for your run
@@ -528,14 +576,14 @@ def main(args):
         wandb.log({"train_loss": train_loss, "train_acc": train_acc, "test_loss": test_loss, "test_acc": test_acc,"learning_rate":float(optimizer.param_groups[0]['lr'])})
         if test_acc > best_val_acc:
             best_val_acc = test_acc
-            torch.save(model.state_dict(), 'best_model_session.pt')
-            torch.save(model.layer1.state_dict(), 'layer1_weights.pth')
-            torch.save(model.layer2.state_dict(), 'layer2_weights.pth')
-            torch.save(model.layer3.state_dict(), 'layer3_weights.pth')
-            torch.save(model.layer4.state_dict(), 'layer4_weights.pth')
-            torch.save(model.fc1.state_dict(), 'fc1_weights.pth')
-            torch.save(model.fc2.state_dict(), 'fc2_weights.pth')
-            torch.save(model.fc3.state_dict(), 'fc3_weights.pth')
+            torch.save(model.state_dict(), '/home/arpitsah/Desktop/Projects Fall-22/DA/domain_adaptation/LSTM-DENSE/speech-emotion-recognition-iemocap/code/models/Models/weights/80_IEMO_80_EMODB/best_model_session.pt')
+            torch.save(model.layer1.state_dict(), '/home/arpitsah/Desktop/Projects Fall-22/DA/domain_adaptation/LSTM-DENSE/speech-emotion-recognition-iemocap/code/models/Models/weights/80_IEMO_80_EMODB/layer1_weights.pth')
+            torch.save(model.layer2.state_dict(), '/home/arpitsah/Desktop/Projects Fall-22/DA/domain_adaptation/LSTM-DENSE/speech-emotion-recognition-iemocap/code/models/Models/weights/80_IEMO_80_EMODB/layer2_weights.pth')
+            torch.save(model.layer3.state_dict(), '/home/arpitsah/Desktop/Projects Fall-22/DA/domain_adaptation/LSTM-DENSE/speech-emotion-recognition-iemocap/code/models/Models/weights/80_IEMO_80_EMODB/layer3_weights.pth')
+            torch.save(model.layer4.state_dict(), '/home/arpitsah/Desktop/Projects Fall-22/DA/domain_adaptation/LSTM-DENSE/speech-emotion-recognition-iemocap/code/models/Models/weights/80_IEMO_80_EMODB/layer4_weights.pth')
+            torch.save(model.fc1.state_dict(), '/home/arpitsah/Desktop/Projects Fall-22/DA/domain_adaptation/LSTM-DENSE/speech-emotion-recognition-iemocap/code/models/Models/weights/80_IEMO_80_EMODB/fc1_weights.pth')
+            torch.save(model.fc2.state_dict(), '/home/arpitsah/Desktop/Projects Fall-22/DA/domain_adaptation/LSTM-DENSE/speech-emotion-recognition-iemocap/code/models/Models/weights/80_IEMO_80_EMODB/fc2_weights.pth')
+            torch.save(model.fc3.state_dict(), '/home/arpitsah/Desktop/Projects Fall-22/DA/domain_adaptation/LSTM-DENSE/speech-emotion-recognition-iemocap/code/models/Models/weights/80_IEMO_80_EMODB/fc3_weights.pth')
             
 
 
@@ -549,17 +597,37 @@ def main(args):
     history_df["epoch"] = [x for x in range(1, n_epoch)]
     # print(history_df)
 
+
+
+'''def test_evalutation(model,dataset):
+    model = CNN()
+    model.to(device)
+    model.load_state_dict(torch.load('/home/arpitsah/Desktop/Projects Fall-22/DA/domain_adaptation/LSTM-DENSE/speech-emotion-recognition-iemocap/code/models/Models/weights/80_IEMO_80_EMODB/best_model_session.pt'))'''
+
+    #layer1_weights = torch.load('layer1_weights.pt')
+    #layer2_weights = torch.load('layer2_weights.pt')
+    #layer3_weights = torch.load('layer3_weights.pt')
+    #layer4_weights = torch.load('layer4_weights.pt')
+    #fc1_layer = torch.load('fc1_weights.pt')
+    #fc2_layer = torch.load('fc2_weights.pt')
+    #fc3_layer = torch.load('fc3_weights.pt')
+
+    #model.layer1.load_state_dict(layer1_weights)
+    #model.layer2.load_state_dict(layer2_weights)
+    #model.layer3.load_state_dict(layer3_weights)
+    #model.layer4.load_state_dict(layer4_weights)
+    #model.fc1.load_state_dict(fc1_layer)
+    #model.fc2.load_state_dict(fc2_layer)
+    #model.fc3.load_state_dict(fc3_layer)
     
 
 if __name__ == "__main__":
-    # torch.manual_seed(0)
-    
-
-
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_dir', type=str, default='/home/arpitsah/Desktop/Projects Fall-22/DA/domain_adaptation/LSTM-DENSE/speech-emotion-recognition-iemocap/preprocess_info', help='path to dataset')
     parser.add_argument('--seed', type = int, default =  42,help ="seed for run")
+    parser.add_argument('--train_datasets',nargs='+', default=['IEMOCAP','EMODB'])
+    parser.add_argument('--test_datasets',nargs='+', default=['IEMOCAP'])
     args = parser.parse_args()
     if args.seed is not None:
        torch.manual_seed(args.seed)
