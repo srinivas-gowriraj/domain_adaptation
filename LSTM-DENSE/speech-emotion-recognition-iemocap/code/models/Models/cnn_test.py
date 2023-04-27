@@ -31,6 +31,8 @@ import librosa.display
 import regex as re
 from torchvision.io import read_image
 import torch.nn as nn
+from sklearn.metrics import precision_score, recall_score, f1_score, accuracy_score
+
 
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -83,10 +85,10 @@ def collate_fn(batch):
 
 def load_data(args, config):
     #dataset = pickle.load(open('/home/achharia/Domain_Adaptation_2/feature_vectors.pkl','rb'))
-    dataset = pickle.load(open('/home/achharia/Domain_Adaptation_2/NSC_datasetset_balaanced.pkl','rb'))
+    dataset = pickle.load(open('/home/arpitsah/Desktop/Projects Fall-22/DA/domain_adaptation/LSTM-DENSE/speech-emotion-recognition-iemocap/preprocess_info/NSC_datasetset_balaanced.pkl','rb'))
     #dataset = pickle.load(open('/home/achharia/Domain_Adaptation_2/domain_adaptation/LSTM-DENSE/speech-emotion-recognition-iemocap/preprocess_info/preprocess_infofeature_vectors_emodb.pkl','rb'))
     
-    datasete = pickle.load(open('Domain_Adaptation_2/NSC_datasetset_balaanced.pkl','rb'))
+    datasete = pickle.load(open('/home/arpitsah/Desktop/Projects Fall-22/DA/domain_adaptation/LSTM-DENSE/speech-emotion-recognition-iemocap/preprocess_info/NSC_datasetset_balaanced.pkl','rb'))
     
     
     # features=np.load('/home/achharia/Domain_Adaptation/features.npz')
@@ -285,6 +287,40 @@ def test(model, valloader, criterion):
     #confusion_matrix(actual_with_label, pred_with_label, labels=final_labels)
 
     #print('\n Classification Report \n {} \n'.format(classification_report(actual_with_label, pred_with_label)))
+    y_true = [ ]
+    y_pred = []
+    for i in actual:
+        for j in i:
+            y_true.append(j)
+            
+    for i in pred_model:
+        for j in i:
+            y_pred.append(j)
+    # actual =  np.array(actual)
+    # pred_model =  np.array(pred_model)
+    # y_true = actual.flatten()
+    # y_pred = pred_model.flatten()
+    precision = precision_score(y_true, y_pred,average="macro")
+    recall = recall_score(y_true, y_pred,average="macro")
+    f1 = f1_score(y_true, y_pred,average="macro")
+    accuracy = accuracy_score(y_true, y_pred)
+
+    # Calculate class-specific metrics
+    classes = sorted(set(y_true))
+    precision_class = {}
+    recall_class = {}
+    f1_class = {}
+    accuracy_class = {}
+    for c in classes:
+        y_true_c = [1 if x == c else 0 for x in y_true]
+        y_pred_c = [1 if x == c else 0 for x in y_pred]
+        precision_class[c] = precision_score(y_true_c, y_pred_c)
+        recall_class[c] = recall_score(y_true_c, y_pred_c)
+        f1_class[c] = f1_score(y_true_c, y_pred_c)
+        accuracy_class[c] = accuracy_score(y_true_c, y_pred_c)
+        
+    print(f'Overall_Precision: {precision:.3f}, Overall_Recall: {recall:.3f}, Overall_F1-score: {f1:.3f}, Overall_Accuracy: {accuracy:.3f}')
+    print(f'Class_Precision: {precision_class}, Class_Recall: {recall_class}, Class_F1-score: {f1_class}, Class_Accuracy: {accuracy_class}')
 
     return test_loss, test_acc.numpy()
             
@@ -430,23 +466,23 @@ def main(args):
     model.to(device)
         #model.load_state_dict(torch.load('/home/achharia/best_model_session_chhhharia.pt'))
 
-    layer1_weights = torch.load('layer1_weighte.pth')
-    layer2_weights = torch.load('layer2_weighte.pth')
-    layer3_weights = torch.load('layer3_weighte.pth')
-    layer4_weights = torch.load('layer4_weighte.pth')
-    fc1_layer = torch.load('fc1_weighte.pth')
-    fc2_layer = torch.load('fc2_weighte.pth')
-    fc3_layer = torch.load('fc3_weighte.pth')
-    #Diag_Affine_layer=torch.load('fcd80obb_weights.pth')
-    #fcd_layer=torch.load('fcd80db_weights.pth')
+    # layer1_weights = torch.load('layer1_weighte.pth')
+    # layer2_weights = torch.load('layer2_weighte.pth')
+    # layer3_weights = torch.load('layer3_weighte.pth')
+    # layer4_weights = torch.load('layer4_weighte.pth')
+    # fc1_layer = torch.load('fc1_weighte.pth')
+    # fc2_layer = torch.load('fc2_weighte.pth')
+    # fc3_layer = torch.load('fc3_weighte.pth')
+    # #Diag_Affine_layer=torch.load('fcd80obb_weights.pth')
+    # #fcd_layer=torch.load('fcd80db_weights.pth')
 
-    model.layer1.load_state_dict(layer1_weights)
-    model.layer2.load_state_dict(layer2_weights)
-    model.layer3.load_state_dict(layer3_weights)
-    model.layer4.load_state_dict(layer4_weights)
-    model.fc1.load_state_dict(fc1_layer)
-    model.fc2.load_state_dict(fc2_layer)
-    model.fc3.load_state_dict(fc3_layer)
+    # model.layer1.load_state_dict(layer1_weights)
+    # model.layer2.load_state_dict(layer2_weights)
+    # model.layer3.load_state_dict(layer3_weights)
+    # model.layer4.load_state_dict(layer4_weights)
+    # model.fc1.load_state_dict(fc1_layer)
+    # model.fc2.load_state_dict(fc2_layer)
+    # model.fc3.load_state_dict(fc3_layer)
     #model.Diag_Affine.load_state_dict(Diag_Affine_layer)
     #model.fcd.load_state_dict(fcd_layer)
 
