@@ -47,9 +47,7 @@ Our approach involves introducing a direct affine transformation that brings the
   <img src="https://user-images.githubusercontent.com/62457915/235064531-a8e96596-9f6d-4f1a-9ccb-f173225c5ecf.png" />
 </p>
 
-## **Implementation Workbench**
 
-The work is implemented using PyTorch. NVIDIA Geforce RTX-3090 Ti with 24GB RAM workbench was used for conducting the experiments.
 
 ## **Directory Structure*
 ~~~
@@ -75,3 +73,7 @@ The work is implemented using PyTorch. NVIDIA Geforce RTX-3090 Ti with 24GB RAM 
 │       └── preprocess_infofeature_vectors_emodb.pkl
 └── README.md
 ~~~
+
+## **Implementation Workbench**
+
+The work is implemented using PyTorch. NVIDIA Geforce RTX-3090 Ti with 24GB RAM workbench was used for conducting the experiments.
