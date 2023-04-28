@@ -74,6 +74,11 @@ Our approach involves introducing a direct affine transformation that brings the
 └── README.md
 ~~~
 
+To replicate the results.
+1. Create a conda enviroment by running conda env create -f environment.yml command
+2. Activate the created conda environment by running conda activate domain_adaption38
+3. Finally, run the LSTM-DENSE/speech-emotion-recognition-iemocap/code/models/Models/pytorch_cnn.py file
+
 ## **Implementation Workbench**
 
 The work is implemented using PyTorch. NVIDIA Geforce RTX-3090 Ti with 24GB RAM workbench was used for conducting the experiments.
